@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!-- Brand palette extracted from the Yaar-App logo -->
+    <color name="yaar_orange">#F7941D</color>
+    <color name="yaar_orange_dark">#D97706</color>
+    <color name="yaar_orange_light">#FFB65C</color>
+    <color name="yaar_green">#1E8E3E</color>
+    <color name="yaar_green_dark">#146C2E</color>
+    <color name="yaar_green_light">#4CAF50</color>
+    <color name="yaar_cream">#FFF8F0</color>
+    <color name="yaar_charcoal">#2B2B2B</color>
+</resources>
