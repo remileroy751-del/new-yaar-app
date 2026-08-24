@@ -17,6 +17,12 @@ interface ShopDao {
     @Query("SELECT * FROM shops WHERE id = :id LIMIT 1")
     suspend fun getById(id: Int): Shop?
 
+    @Query("SELECT * FROM shops WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun findByRemoteId(remoteId: String): Shop?
+
+    @Query("SELECT * FROM shops")
+    suspend fun getAll(): List<Shop>
+
     @Insert
     suspend fun insert(shop: Shop): Long
 

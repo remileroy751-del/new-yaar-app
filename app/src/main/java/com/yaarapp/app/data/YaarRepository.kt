@@ -26,7 +26,13 @@ class YaarRepository(context: Context) {
     private val interestDao = db.interestDao()
     private val adCampaignDao = db.adCampaignDao()
 
+    /** Synchronisation Firestore/Storage — voir FirestoreSync.kt pour le détail du fonctionnement. */
+    private val firestoreSync = FirestoreSync(context, db)
+
     val session = SessionManager(context)
+
+    /** À appeler une fois au démarrage de l'app (voir YaarApplication.onCreate). */
+    fun startRemoteSync() = firestoreSync.startRemoteSync()
 
     // ---------- Amorçage des données de démonstration ----------
 
@@ -125,7 +131,9 @@ class YaarRepository(context: Context) {
             categories = categories.take(ShopCategories.MAX_SELECTABLE)
         )
         val id = shopDao.insert(shop)
-        return shop.copy(id = id.toInt())
+        val created = shop.copy(id = id.toInt())
+        firestoreSync.syncShop(created)
+        return created
     }
 
     /**
@@ -134,7 +142,9 @@ class YaarRepository(context: Context) {
      */
     suspend fun purchaseExtraProductSlots(shop: Shop) {
         if (shop.extraProductSlots > 0) return
-        shopDao.update(shop.copy(extraProductSlots = ShopLimits.EXTRA_PACK_PRODUCTS))
+        val updated = shop.copy(extraProductSlots = ShopLimits.EXTRA_PACK_PRODUCTS)
+        shopDao.update(updated)
+        firestoreSync.syncShop(updated)
     }
 
     fun observeShopProducts(shopId: Int): Flow<List<Product>> = productDao.observeByShop(shopId)
@@ -154,7 +164,7 @@ class YaarRepository(context: Context) {
         if (activeCount >= shop.maxProducts) {
             return AddProductResult.LimitReached(shop.maxProducts)
         }
-        productDao.insert(
+        val id = productDao.insert(
             Product(
                 shopId = shop.id,
                 shopName = shop.name,
@@ -167,14 +177,20 @@ class YaarRepository(context: Context) {
                 city = shop.city
             )
         )
+        productDao.getById(id.toInt())?.let { firestoreSync.syncProduct(it) }
         return AddProductResult.Success
     }
 
-    suspend fun deleteProduct(product: Product) = productDao.delete(product)
+    suspend fun deleteProduct(product: Product) {
+        productDao.delete(product)
+        firestoreSync.deleteProductRemote(product)
+    }
 
     /** Le vendeur désactive manuellement un produit encore actif (ex : produit vendu). */
     suspend fun deactivateProduct(product: Product) {
-        productDao.update(product.copy(isActive = false))
+        val updated = product.copy(isActive = false)
+        productDao.update(updated)
+        firestoreSync.syncProduct(updated)
     }
 
     /**
@@ -186,7 +202,9 @@ class YaarRepository(context: Context) {
         if (activeCount >= shop.maxProducts) {
             return AddProductResult.LimitReached(shop.maxProducts)
         }
-        productDao.update(product.copy(isActive = true, activatedAt = System.currentTimeMillis()))
+        val updated = product.copy(isActive = true, activatedAt = System.currentTimeMillis())
+        productDao.update(updated)
+        firestoreSync.syncProduct(updated)
         return AddProductResult.Success
     }
 
@@ -199,7 +217,10 @@ class YaarRepository(context: Context) {
      */
     suspend fun deactivateExpiredProducts(shopId: Int): Int {
         val cutoff = System.currentTimeMillis() - FREE_LISTING_DURATION_MS
-        return productDao.deactivateExpired(shopId, cutoff)
+        val expiring = productDao.getExpiredActiveForShop(shopId, cutoff)
+        val count = productDao.deactivateExpired(shopId, cutoff)
+        expiring.forEach { firestoreSync.syncProduct(it.copy(isActive = false)) }
+        return count
     }
 
     // ---------- Campagnes publicitaires ("Promouvoir mes produits") ----------
@@ -223,7 +244,9 @@ class YaarRepository(context: Context) {
             priceFcfa = AdPricing.priceFor(expositions)
         )
         val id = adCampaignDao.insert(campaign)
-        productDao.update(product.copy(isPromoted = true))
+        val promoted = product.copy(isPromoted = true)
+        productDao.update(promoted)
+        firestoreSync.syncProduct(promoted)
         return campaign.copy(id = id.toInt())
     }
 
@@ -245,7 +268,9 @@ class YaarRepository(context: Context) {
             adCampaignDao.update(campaign.copy(remainingExpositions = newRemaining, isActive = stillRunning))
             if (!stillRunning) {
                 productDao.getById(campaign.productId)?.let { product ->
-                    productDao.update(product.copy(isPromoted = false))
+                    val updated = product.copy(isPromoted = false)
+                    productDao.update(updated)
+                    firestoreSync.syncProduct(updated)
                 }
             }
         }

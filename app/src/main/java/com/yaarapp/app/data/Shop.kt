@@ -32,5 +32,12 @@ data class Shop(
     val idCardFrontUrl: String? = null,
     val idCardBackUrl: String? = null,
     val certificationRequestedAt: Long? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /**
+     * Identifiant du document Firestore correspondant (auto-généré par Firestore,
+     * globalement unique) une fois cette boutique synchronisée en ligne. `null` tant
+     * que la synchronisation n'a pas encore eu lieu (ex. pas de réseau) — l'app reste
+     * pleinement fonctionnelle en local dans ce cas, la synchro réessaiera plus tard.
+     */
+    val remoteId: String? = null
 )

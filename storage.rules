@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Règles de sécurité Firebase Storage pour Yaar-App.
+// À déployer avec : firebase deploy --only storage
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Photos de produits et logos de boutiques : publiques en lecture (marketplace),
+    // écriture réservée aux utilisateurs connectés.
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.resource.size < 5 * 1024 * 1024;
+    }
+    match /shops/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Pièces d'identité (certification) : chaque utilisateur ne peut déposer SES
+    // PROPRES photos que dans son propre dossier (id_cards/{uid}/...), et personne
+    // ne peut les relire depuis l'app cliente — seule l'équipe Yaar-App y accède,
+    // via la console Firebase ou le SDK Admin (Cloud Function), pour étudier le dossier.
+    match /id_cards/{userId}/{fileName} {
+      allow read: if false;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.size < 8 * 1024 * 1024;
+    }
+  }
+}

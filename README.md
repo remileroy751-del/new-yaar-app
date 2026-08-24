@@ -90,13 +90,23 @@ photos que vous avez fournies. Vous pouvez aussi créer un **nouveau compte** de
 l'écran d'inscription : vous verrez alors ces produits de démonstration dans l'onglet
 "Acheter", exactement comme le ferait un vrai acheteur découvrant la plateforme.
 
+## 🟢 Synchronisation en ligne (Firebase)
+
+**Les boutiques et les produits sont désormais partagés entre tous les téléphones**
+via Firebase Firestore + Storage — un produit publié depuis un appareil apparaît dans
+"Acheter" sur tous les autres. Les comptes utilisateurs, le panier, les notifications
+"intéressé" et les campagnes publicitaires restent pour l'instant locaux à chaque
+appareil (prochain lot). Détails complets, état précis collection par collection, et
+marche à suivre pour la config Firebase (Firestore, Storage, Authentication) :
+**[`BACKEND_FIREBASE.md`](./BACKEND_FIREBASE.md)**.
+
 ## ⚠️ Limitation importante à connaître avant la mise en production
 
-Dans cette version, **les comptes, boutiques, produits et paniers sont stockés
-uniquement en local sur l'appareil** (base de données Room). Cela permet de tester tout
-le parcours immédiatement, sans serveur. **Mais cela signifie que deux téléphones
-différents ne voient pas les mêmes boutiques/produits** : chaque installation a sa
-propre base de données locale, isolée des autres.
+Dans cette version, **les comptes utilisateurs et le panier restent stockés
+uniquement en local sur l'appareil** (base de données Room) — voir la section
+ci-dessus pour ce qui est déjà synchronisé (boutiques, produits) et ce qui ne l'est
+pas encore.
+
 
 ## 💳 Paiement Kkiapay — à configurer avant de facturer réellement
 
@@ -150,11 +160,14 @@ app/src/main/java/com/yaarapp/app/
 │   ├── ShopLimits.kt            # Capacité produits (5→20, 5 000 FCFA) + AdPricing (campagnes)
 │   ├── CertificationConfig.kt   # Prix de certification boutique (10 000 FCFA)
 │   ├── UserDao.kt, ShopDao.kt, ProductDao.kt, CartDao.kt, InterestDao.kt, AdCampaignDao.kt
-│   ├── YaarDatabase.kt          # Base Room (6 tables, version 4)
+│   ├── YaarDatabase.kt          # Base Room (6 tables, version 5)
 │   ├── YaarRepository.kt        # Authentification, boutique, marketplace, panier, paiements,
 │   │                              # campagnes publicitaires, certification, notifications
+│   ├── FirestoreSync.kt         # Synchronisation Firestore/Storage (boutiques + produits)
 │   ├── SessionManager.kt        # Session (DataStore) — utilisateur connecté
 │   └── SeedData.kt              # Comptes/boutiques/produits de démonstration
+├── firebase/
+│   └── FirebaseModule.kt        # Accès Firestore/Storage/Auth + connexion anonyme
 ├── nav/                         # Routes + NavHost (onboarding → auth → onglets principaux)
 ├── ui/
 │   ├── components/               # ProductCard, barre de navigation du bas, filtres
@@ -224,14 +237,15 @@ debug et le publie en tant qu'artefact téléchargeable.
 
 ## 🚀 Prochaines étapes suggérées
 
-- Brancher **Firebase** (Firestore + Auth + Storage + Cloud Messaging) pour que les
-  boutiques, produits, campagnes publicitaires et notifications soient partagés en
-  temps réel entre tous les téléphones — guide complet dans `BACKEND_FIREBASE.md`.
+- Étendre la synchronisation Firebase aux comptes, au panier, aux campagnes
+  publicitaires (+ Cloud Function de comptage partagé) et aux notifications
+  "intéressé" (+ notification push) — guide complet dans `BACKEND_FIREBASE.md`.
+- Passer de l'authentification anonyme à la connexion par numéro de téléphone
+  (Firebase Auth) pour des règles de sécurité plus strictes par propriétaire.
 - Renseigner la clé publique Kkiapay (`util/KkiapayConfig.kt`) pour activer les
   paiements réels (capacité produits, campagnes publicitaires, certification).
 - Ajouter une interface d'administration pour étudier les dossiers de certification
-  (aujourd'hui : vérification manuelle des photos recto/verso dans Firestore, voir
-  `BACKEND_FIREBASE.md`).
+  (aujourd'hui : vérification manuelle dans Firestore, voir `BACKEND_FIREBASE.md`).
 - Publier l'application sur le Google Play Store (nécessite un compte développeur
   Google Play).
 

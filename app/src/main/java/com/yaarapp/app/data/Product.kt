@@ -47,7 +47,12 @@ data class Product(
      * produit (voir [AdCampaign]) — piloté entièrement par [YaarRepository], jamais
      * modifié directement ailleurs.
      */
-    val isPromoted: Boolean = false
+    val isPromoted: Boolean = false,
+    /**
+     * Identifiant du document Firestore correspondant une fois ce produit synchronisé
+     * en ligne (voir [Shop.remoteId] pour le principe complet).
+     */
+    val remoteId: String? = null
 ) {
     fun expiresAt(): Long = activatedAt + FREE_LISTING_DURATION_MS
     fun isExpired(now: Long = System.currentTimeMillis()): Boolean = isActive && now >= expiresAt()

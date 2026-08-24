@@ -27,6 +27,9 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE id = :id")
     suspend fun getById(id: Int): Product?
 
+    @Query("SELECT * FROM products WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun findByRemoteId(remoteId: String): Product?
+
     /** Nombre de produits actuellement EXPOSÉS (actifs) — c'est ce qui compte pour la limite du forfait. */
     @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1")
     suspend fun countActiveForShop(shopId: Int): Int

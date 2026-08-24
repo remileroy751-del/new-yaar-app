@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [User::class, Shop::class, Product::class, CartItem::class, Interest::class, AdCampaign::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -33,10 +33,11 @@ abstract class YaarDatabase : RoomDatabase() {
                 )
                     // Version 2 a introduit pays/ville/sexe et l'expiration des produits ;
                     // version 3 a ajouté logo/description/catégories de boutique, la
-                    // promotion et les notifications "intéressé" ; version 4 remplace le
-                    // système de forfaits par la capacité de produits payante (5→20) et
-                    // les campagnes publicitaires calculées (expositions × prix), plus la
-                    // certification de boutique. Comme il s'agit d'une base locale de démonstration (pas de
+                    // promotion et les notifications "intéressé" ; version 4 a remplacé
+                    // le système de forfaits par la capacité de produits payante (5→20)
+                    // et les campagnes publicitaires calculées, plus la certification de
+                    // boutique ; version 5 ajoute remoteId (synchronisation Firestore).
+                    // Comme il s'agit d'une base locale de démonstration (pas de
                     // données critiques côté serveur), on repart d'une base propre au lieu
                     // d'écrire une migration détaillée. À remplacer par une vraie migration
                     // Room (ou par la bascule vers Firestore, voir /BACKEND_FIREBASE.md)

@@ -20,5 +20,6 @@ class YaarApplication : Application() {
         applicationScope.launch {
             repository.seedIfEmpty()
         }
+        repository.startRemoteSync()
     }
 }

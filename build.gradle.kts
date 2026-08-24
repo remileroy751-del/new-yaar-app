@@ -3,6 +3,9 @@ plugins {
     id("com.android.application") version "8.5.2" apply false
     id("org.jetbrains.kotlin.android") version "1.9.24" apply false
     id("com.google.devtools.ksp") version "1.9.24-1.0.20" apply false
+    // Google Services (Firebase) : appliqué conditionnellement dans app/build.gradle.kts,
+    // uniquement si google-services.json est présent — voir BACKEND_FIREBASE.md.
+    id("com.google.gms.google-services") version "4.5.0" apply false
 }
 
 tasks.register("clean", Delete::class) {

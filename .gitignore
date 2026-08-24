@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Firebase — ne jamais committer sur un dépôt public : contient des identifiants
+# de projet. Ajoutez-le vous-même en local (voir BACKEND_FIREBASE.md), ou passez-le
+# en secret GitHub Actions pour la CI (voir le commentaire dans le workflow).
+app/google-services.json
