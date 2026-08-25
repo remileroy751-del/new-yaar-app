@@ -33,10 +33,20 @@ jobs:
         # repository secret). Sans ce secret, l'APK compile quand même (les
         # dépendances Firebase sont toujours incluses), mais la synchronisation en
         # ligne ne fonctionnera pas au lancement de l'app — juste le mode 100% local.
-        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+        #
+        # NOTE : le contexte "secrets" ne peut PAS être utilisé dans une condition
+        # "if:" d'étape (restriction de GitHub Actions, pas une erreur de syntaxe) —
+        # la vérification "secret vide ou non" se fait donc DANS le script shell
+        # ci-dessous plutôt que dans une condition "if:".
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json restauré depuis le secret GOOGLE_SERVICES_JSON."
+          else
+            echo "Secret GOOGLE_SERVICES_JSON non configuré : compilation sans Firebase actif (mode local)."
+          fi
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
