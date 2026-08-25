@@ -230,8 +230,9 @@ debug et le publie en tant qu'artefact téléchargeable.
 
 - Android Studio Koala+ / JDK 17
 - `compileSdk` / `targetSdk` 34, `minSdk` 24 (Android 7.0+)
-- Kotlin 1.9.24, Jetpack Compose (BOM 2024.06.00), Material 3, Navigation Compose, Room,
-  DataStore Preferences, Coil
+- Kotlin 2.3.21 (KSP 2.3.11), Jetpack Compose (BOM 2024.06.00, compilateur piloté par
+  le plugin `org.jetbrains.kotlin.plugin.compose`), Material 3, Navigation Compose,
+  Room, DataStore Preferences, Coil, Firebase (BoM 34.18.0)
 - Le choix de photo utilise le **sélecteur de photos système** (Photo Picker), qui ne
   nécessite aucune permission de stockage sur Android récent.
 

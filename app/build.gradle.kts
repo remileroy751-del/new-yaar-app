@@ -1,6 +1,10 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    // Compilateur Compose (Kotlin 2.0+) — remplace composeOptions.kotlinCompilerExtensionVersion.
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
 
@@ -49,16 +53,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // NOTE : "kotlinOptions { jvmTarget = ... }" est supprimé depuis Kotlin 2.2 (pas
+    // seulement déprécié) — le réglage équivalent se fait maintenant via le bloc
+    // kotlin { compilerOptions { ... } } tout en bas de ce fichier.
 
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
+    // NOTE : plus de bloc composeOptions { kotlinCompilerExtensionVersion = ... } ici —
+    // depuis Kotlin 2.0, le compilateur Compose est piloté par le plugin
+    // "org.jetbrains.kotlin.plugin.compose" (voir plugins{} ci-dessus et build.gradle.kts
+    // racine), dont la version doit toujours suivre celle du plugin Kotlin.
 
     packaging {
         resources {
@@ -122,4 +127,11 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Remplace l'ancien "android.kotlinOptions" (supprimé depuis Kotlin 2.2).
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.fromTarget("17")
+    }
 }

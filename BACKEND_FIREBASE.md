@@ -96,6 +96,22 @@ Firebase, puis déployer ces fichiers avec la Firebase CLI.
 > vérifiez sur https://firebase.google.com/docs/android/setup que les noms
 > d'artefacts n'ont pas encore changé.
 
+> **Note Kotlin 2.3.21 (25/08/2026)** : `firebase-auth` 24.2.0 (tiré par le BoM
+> 34.18.0) est compilé avec un format de métadonnées Kotlin que seul un compilateur
+> Kotlin 2.3+ peut lire — le projet est donc passé de Kotlin 1.9.24 à **2.3.21**
+> (`build.gradle.kts` racine), avec KSP **2.3.11** assorti. Cette bascule impose
+> deux changements Gradle obligatoires, déjà faits dans ce dépôt :
+> - Le compilateur Compose se configure désormais via le plugin
+>   `org.jetbrains.kotlin.plugin.compose` (même version que Kotlin) au lieu de
+>   `composeOptions { kotlinCompilerExtensionVersion = ... }`, supprimé.
+> - `android.kotlinOptions { jvmTarget = ... }` est supprimé depuis Kotlin 2.2 ;
+>   remplacé par le bloc `kotlin { compilerOptions { jvmTarget = ... } }` en bas de
+>   `app/build.gradle.kts`.
+>
+> Le reste (Compose BOM 2024.06.00, compileSdk 34, AGP 8.5.2) n'a volontairement
+> **pas** été mis à jour pour limiter les risques — Kotlin 2.3.21 reste compatible
+> avec ces versions plus anciennes (AGP 8.2.2 à 8.13.0 est supporté).
+
 > **Compiler sans `google-services.json`** : les dépendances Firebase (Firestore,
 > Auth, Storage, Messaging) sont toujours incluses dans `app/build.gradle.kts`, que
 > le fichier soit présent ou non — seul le PLUGIN Google Services (qui exige le
