@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "443792440784",
+    "project_id": "yaarapp-6c4ae",
+    "storage_bucket": "yaarapp-6c4ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:443792440784:android:009766bbbcf264be298dd5",
+        "android_client_info": {
+          "package_name": "com.yaarapp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9TUD8qUKU9KId64cJqcnGEsUqqtCLQRQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

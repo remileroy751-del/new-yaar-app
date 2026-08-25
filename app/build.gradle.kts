@@ -4,9 +4,12 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// Le plugin Google Services (Firebase) n'est appliqué QUE si google-services.json est
-// présent dans ce dossier (app/). Tant qu'il n'y est pas, le projet compile normalement
-// en mode 100% local (Room) — voir BACKEND_FIREBASE.md pour l'ajouter.
+// Le plugin Google Services (Firebase) exige que google-services.json existe pour
+// s'exécuter (sinon erreur de configuration Gradle) — il n'est donc appliqué QUE si
+// ce fichier est présent dans ce dossier (app/). Les DÉPENDANCES Firebase, elles,
+// restent toujours incluses (voir plus bas) : le code compile dans tous les cas, et
+// se dégrade proprement en mode 100% local au runtime si Firebase n'est pas configuré
+// (voir data/FirestoreSync.kt) — voir BACKEND_FIREBASE.md pour l'ajouter.
 val hasFirebaseConfig = file("google-services.json").exists()
 if (hasFirebaseConfig) {
     apply(plugin = "com.google.gms.google-services")
@@ -94,20 +97,24 @@ dependencies {
     // DataStore for simple prefs (onboarding flag, delivery zone, etc.)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Firebase — uniquement si google-services.json est présent (voir plus haut).
+    // Firebase — dépendances TOUJOURS incluses (indépendamment de la présence de
+    // google-services.json), pour que le projet compile dans tous les cas — y compris
+    // en CI sans le secret GOOGLE_SERVICES_JSON configuré. Sans configuration Firebase
+    // valide au runtime, les appels Firebase échouent proprement et sont rattrapés
+    // (try/catch) dans data/FirestoreSync.kt : l'app continue de fonctionner en local.
+    // Seul le PLUGIN Google Services reste conditionnel (lui exige le fichier pour
+    // pouvoir s'exécuter, voir plus haut).
     // Le BOM gère les versions compatibles entre les modules Firebase automatiquement.
     // Depuis le BoM 34.0.0 (juillet 2025), Firebase a retiré les modules "-ktx" séparés :
     // les API Kotlin (ex. Firebase.firestore) sont désormais directement dans les modules
     // principaux ci-dessous — ne PAS ajouter de suffixe "-ktx", ça ne compilerait plus.
-    if (hasFirebaseConfig) {
-        implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
-        implementation("com.google.firebase:firebase-firestore")
-        implementation("com.google.firebase:firebase-auth")
-        implementation("com.google.firebase:firebase-storage")
-        implementation("com.google.firebase:firebase-messaging")
-        // Permet d'utiliser .await() sur les Task Firebase depuis des coroutines Kotlin.
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
-    }
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-messaging")
+    // Permet d'utiliser .await() sur les Task Firebase depuis des coroutines Kotlin.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

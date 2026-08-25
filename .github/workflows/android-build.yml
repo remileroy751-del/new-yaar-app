@@ -30,9 +30,10 @@ jobs:
         # Une fois Firebase configuré (voir BACKEND_FIREBASE.md), collez le contenu
         # de votre app/google-services.json dans un secret de dépôt nommé
         # GOOGLE_SERVICES_JSON (Settings → Secrets and variables → Actions → New
-        # repository secret). Tant que ce secret n'existe pas, cette étape ne fait
-        # rien et le projet compile normalement en mode 100% local.
-        if: ${{ env.GOOGLE_SERVICES_JSON != '' }}
+        # repository secret). Sans ce secret, l'APK compile quand même (les
+        # dépendances Firebase sont toujours incluses), mais la synchronisation en
+        # ligne ne fonctionnera pas au lancement de l'app — juste le mode 100% local.
+        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: echo "$GOOGLE_SERVICES_JSON" > app/google-services.json

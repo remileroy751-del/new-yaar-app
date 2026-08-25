@@ -96,6 +96,16 @@ Firebase, puis déployer ces fichiers avec la Firebase CLI.
 > vérifiez sur https://firebase.google.com/docs/android/setup que les noms
 > d'artefacts n'ont pas encore changé.
 
+> **Compiler sans `google-services.json`** : les dépendances Firebase (Firestore,
+> Auth, Storage, Messaging) sont toujours incluses dans `app/build.gradle.kts`, que
+> le fichier soit présent ou non — seul le PLUGIN Google Services (qui exige le
+> fichier pour s'exécuter) reste conditionnel. Résultat : **le projet compile dans
+> tous les cas**, y compris en CI sans le secret `GOOGLE_SERVICES_JSON` configuré.
+> Sans Firebase correctement configuré au runtime, les appels de synchronisation
+> échouent proprement (rattrapés par un `try/catch` dans `data/FirestoreSync.kt`) et
+> l'app fonctionne alors en mode 100% local, exactement comme avant l'intégration
+> Firebase.
+
 ## Étapes pour créer le projet Firebase (à faire vous-même, ~15 min)
 
 Je ne peux pas créer le projet à votre place (il faut votre propre compte Google),
