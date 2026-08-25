@@ -121,6 +121,14 @@ Firebase, puis déployer ces fichiers avec la Firebase CLI.
 > `gradle-version: '8.13'`). `compileSdk`/`targetSdk` (34) restent inchangés — AGP
 > 8.13 supporte jusqu'à l'API 36, donc aucune contrainte de ce côté.
 
+> **Note Room 2.8.4 (25/08/2026)** : le compilateur Room (via KSP2, avec Kotlin 2.3.21)
+> plantait sur les fonctions `suspend` des DAO (`IllegalStateException: unexpected jvm
+> signature V`) — bug connu de KSP2, corrigé dans Room à partir de la 2.7.0. Room est
+> donc passé de **2.6.1 à 2.8.4** (`app/build.gradle.kts`), toujours sous le paquet
+> `androidx.room` (Room 3.0, sorti récemment sous `androidx.room3`, est une réécriture
+> majeure à part qui aurait exigé de renommer tous les imports du projet — pas
+> nécessaire ici, volontairement évité).
+
 > **Compiler sans `google-services.json`** : les dépendances Firebase (Firestore,
 > Auth, Storage, Messaging) sont toujours incluses dans `app/build.gradle.kts`, que
 > le fichier soit présent ou non — seul le PLUGIN Google Services (qui exige le

@@ -92,9 +92,15 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Local persistence for cart & products
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    // Room 2.8.4 (et non 2.6.1) : version minimale nécessaire pour que le compilateur
+    // Room (via KSP2, Kotlin 2.3.21) traite correctement les fonctions "suspend" des
+    // DAO — les versions antérieures à 2.7.0 provoquent une erreur connue
+    // "IllegalStateException: unexpected jvm signature V" sur KSP2. Toujours sous le
+    // paquet androidx.room (pas androidx.room3, qui est une réécriture majeure séparée
+    // avec renommage de tous les imports — non nécessaire ici).
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
