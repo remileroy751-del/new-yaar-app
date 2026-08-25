@@ -108,9 +108,18 @@ Firebase, puis déployer ces fichiers avec la Firebase CLI.
 >   remplacé par le bloc `kotlin { compilerOptions { jvmTarget = ... } }` en bas de
 >   `app/build.gradle.kts`.
 >
-> Le reste (Compose BOM 2024.06.00, compileSdk 34, AGP 8.5.2) n'a volontairement
+> Le Compose BOM (2024.06.00) et `compileSdk`/`targetSdk` (34) n'ont volontairement
 > **pas** été mis à jour pour limiter les risques — Kotlin 2.3.21 reste compatible
-> avec ces versions plus anciennes (AGP 8.2.2 à 8.13.0 est supporté).
+> avec ces versions plus anciennes.
+
+> **Note AGP 8.13.2 (25/08/2026)** : KSP 2.3.11 appelle une méthode
+> (`AndroidComponentsExtension.addKspConfigurations`) qui n'existe pas dans AGP 8.5.2
+> (`NoSuchMethodError` à la compilation). AGP est donc passé de **8.5.2 à 8.13.2**
+> (`build.gradle.kts` racine) — c'est aussi la version où Google a officiellement
+> ajouté le support de Kotlin 2.3 (R8 8.13.19). **AGP 8.13 exige Gradle 8.13 minimum**
+> (mis à jour dans `gradle-wrapper.properties` et le workflow CI :
+> `gradle-version: '8.13'`). `compileSdk`/`targetSdk` (34) restent inchangés — AGP
+> 8.13 supporte jusqu'à l'API 36, donc aucune contrainte de ce côté.
 
 > **Compiler sans `google-services.json`** : les dépendances Firebase (Firestore,
 > Auth, Storage, Messaging) sont toujours incluses dans `app/build.gradle.kts`, que

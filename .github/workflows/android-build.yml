@@ -20,15 +20,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Installe Gradle 8.7 (version compatible avec AGP 8.5.2, voir app/build.gradle.kts)
-      # de façon fiable, indépendamment de la version de Gradle préinstallée sur la
-      # machine GitHub Actions — c'est cette dépendance implicite (via "gradle wrapper
-      # --gradle-version 8.7", qui s'exécutait avec le Gradle système, devenu 9.7.0
-      # sans prévenir) qui causait l'échec précédent ("addKspConfigurations").
-      - name: Setup Gradle 8.7
+      # Installe Gradle 8.13 (version minimale exigée par AGP 8.13.2, voir build.gradle.kts
+      # racine) de façon fiable, indépendamment de la version de Gradle préinstallée sur
+      # la machine GitHub Actions (qui peut changer sans prévenir — c'est ce qui avait
+      # cassé une première fois la génération de wrapper via "gradle wrapper ...").
+      - name: Setup Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.13'
 
       - name: Restore google-services.json (Firebase, si configuré)
         # Une fois Firebase configuré (voir BACKEND_FIREBASE.md), collez le contenu
@@ -52,7 +51,7 @@ jobs:
             echo "Secret GOOGLE_SERVICES_JSON non configuré : compilation sans Firebase actif (mode local)."
           fi
 
-      # "gradle" ici résout vers la version 8.7 installée par setup-gradle ci-dessus
+      # "gradle" ici résout vers la version 8.13 installée par setup-gradle ci-dessus
       # (pas de wrapper committé dans ce dépôt — voir note dans README.md).
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
