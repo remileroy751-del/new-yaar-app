@@ -219,11 +219,19 @@ gradle wrapper --gradle-version 8.7   # régénère gradlew une seule fois
 gradle assembleDebug
 ```
 
+⚠️ Si vous régénérez `gradlew` avec l'option 1, utilisez une installation de **Gradle 8.7
+exactement** (pas une version plus récente comme 9.x) : Gradle 9.x n'est pas compatible
+avec la version d'AGP (8.5.2) utilisée par ce projet (erreur type
+`addKspConfigurations`). C'est exactement le problème qu'évite l'option C ci-dessous.
+
 L'APK généré se trouve dans `app/build/outputs/apk/debug/`.
 
 ### Option C — GitHub Actions (CI automatique)
 Le workflow `.github/workflows/android-build.yml` est prêt à l'emploi : à chaque
-`push`, il installe le JDK 17, installe Gradle, régénère le wrapper, compile l'APK de
+`push`, il installe le JDK 17, installe **Gradle 8.7 via l'action officielle
+`gradle/actions/setup-gradle`** (fiable et reproductible, indépendante de la version de
+Gradle préinstallée sur la machine GitHub Actions — qui peut changer sans prévenir),
+compile l'APK de
 debug et le publie en tant qu'artefact téléchargeable.
 
 ## 📦 Prérequis techniques
