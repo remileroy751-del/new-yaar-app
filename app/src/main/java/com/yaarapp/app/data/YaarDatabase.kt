@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [User::class, Shop::class, Product::class, CartItem::class, Interest::class, AdCampaign::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,7 +36,10 @@ abstract class YaarDatabase : RoomDatabase() {
                     // promotion et les notifications "intéressé" ; version 4 a remplacé
                     // le système de forfaits par la capacité de produits payante (5→20)
                     // et les campagnes publicitaires calculées, plus la certification de
-                    // boutique ; version 5 ajoute remoteId (synchronisation Firestore).
+                    // boutique ; version 5 ajoute remoteId (synchronisation Firestore) ;
+                    // version 6 simplifie l'inscription (suppression du sexe et du mot de
+                    // passe — identification par numéro WhatsApp uniquement) et retire les
+                    // données de démonstration (SeedData supprimé).
                     // Comme il s'agit d'une base locale de démonstration (pas de
                     // données critiques côté serveur), on repart d'une base propre au lieu
                     // d'écrire une migration détaillée. À remplacer par une vraie migration

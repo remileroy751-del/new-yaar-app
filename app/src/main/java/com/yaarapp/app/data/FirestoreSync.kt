@@ -2,6 +2,7 @@ package com.yaarapp.app.data
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.google.firebase.firestore.DocumentChange
 import com.yaarapp.app.firebase.FirebaseModule
 import kotlinx.coroutines.CoroutineScope
@@ -11,6 +12,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.UUID
+
+private const val TAG = "YaarFirestoreSync"
 
 /**
  * Synchronisation en ligne des boutiques et produits via Firestore + Storage.
@@ -57,17 +60,30 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         syncScope.launch {
             try {
                 FirebaseModule.ensureSignedIn()
+                Log.i(TAG, "Connexion Firebase anonyme OK — écoute temps réel démarrée.")
             } catch (e: Exception) {
+                Log.w(TAG, "Connexion Firebase impossible au démarrage (pas de réseau, ou " +
+                    "\"Anonyme\" non activé dans Firebase Auth ?) : ${e.message}")
                 listenersStarted = false
                 return@launch // pas de réseau au lancement : on retentera au prochain appel de synchro
             }
 
             shopsCollection.addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
+                if (error != null) {
+                    Log.w(TAG, "Écoute Firestore \"shops\" en erreur : ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
+                Log.d(TAG, "Changements reçus sur \"shops\" : ${snapshot.documentChanges.size}")
                 syncScope.launch { applyRemoteShopChanges(snapshot.documentChanges) }
             }
             productsCollection.addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
+                if (error != null) {
+                    Log.w(TAG, "Écoute Firestore \"products\" en erreur : ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
+                Log.d(TAG, "Changements reçus sur \"products\" : ${snapshot.documentChanges.size}")
                 syncScope.launch { applyRemoteProductChanges(snapshot.documentChanges) }
             }
         }
@@ -124,7 +140,9 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 if (toSync.remoteId != shop.remoteId || toSync.logoUrl != shop.logoUrl) {
                     shopDao.update(toSync)
                 }
+                Log.i(TAG, "Boutique \"${shop.name}\" synchronisée (document ${docRef.id}).")
             } catch (e: Exception) {
+                Log.w(TAG, "Échec de synchro pour la boutique \"${shop.name}\" : ${e.message}")
                 // Pas de réseau, ou erreur Firestore : la boutique reste utilisable en local ;
                 // la prochaine modification (ou le prochain lancement) retentera la synchro.
             }
@@ -143,7 +161,9 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 if (toSync.remoteId != product.remoteId || toSync.imageUrl != product.imageUrl) {
                     productDao.update(toSync)
                 }
+                Log.i(TAG, "Produit \"${product.name}\" synchronisé (document ${docRef.id}).")
             } catch (e: Exception) {
+                Log.w(TAG, "Échec de synchro pour le produit \"${product.name}\" : ${e.message}")
                 // Idem : échec silencieux, la synchro réessaiera plus tard.
             }
         }

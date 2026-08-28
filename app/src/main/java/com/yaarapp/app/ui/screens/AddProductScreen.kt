@@ -24,6 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import coil.compose.AsyncImage
+import com.yaarapp.app.data.ProductCategories
 import com.yaarapp.app.util.ImageStorage
 import com.yaarapp.app.viewmodel.YaarViewModel
 
@@ -60,7 +65,8 @@ fun AddProductScreen(
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf<String?>(null) }
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
     val error by viewModel.addProductError.collectAsState()
 
     val pickMedia = rememberLauncherForActivityResult(
@@ -129,14 +135,42 @@ fun AddProductScreen(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
             )
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Catégorie (ex : Mode, Électronique, Meubles...)") },
+
+            // Catégorie : liste déroulante, le vendeur choisit obligatoirement parmi
+            // les catégories existantes — il ne peut pas en saisir une autre.
+            ExposedDropdownMenuBox(
+                expanded = categoryMenuExpanded,
+                onExpandedChange = { categoryMenuExpanded = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
-            )
+            ) {
+                OutlinedTextField(
+                    value = category ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Catégorie") },
+                    placeholder = { Text("Sélectionner une catégorie") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = categoryMenuExpanded,
+                    onDismissRequest = { categoryMenuExpanded = false }
+                ) {
+                    ProductCategories.all.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                category = option
+                                categoryMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
             OutlinedTextField(
                 value = price,
                 onValueChange = { price = it.filter { c -> c.isDigit() } },
@@ -168,16 +202,19 @@ fun AddProductScreen(
             Button(
                 onClick = {
                     val uri = pickedImageUri
-                    if (uri == null) return@Button
+                    val selectedCategory = category
+                    if (uri == null || selectedCategory == null) return@Button
                     val savedPath = ImageStorage.saveToInternalStorage(context, uri) ?: return@Button
                     viewModel.addProduct(
                         name = name.trim(),
                         description = description.trim(),
                         price = price.toDoubleOrNull() ?: 0.0,
                         imageUrl = savedPath,
-                        category = category.trim()
+                        category = selectedCategory
                     ) { onSaved() }
                 },
+                enabled = pickedImageUri != null && category != null && name.isNotBlank() &&
+                    description.isNotBlank() && price.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 20.dp),

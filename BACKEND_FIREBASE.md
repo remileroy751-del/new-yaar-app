@@ -24,6 +24,41 @@ bas) : activer Firestore Database, Storage et Authentication (anonyme) si ce n'e
 déjà fait, puis déployer `firestore.rules` / `storage.rules` / `firestore.indexes.json`
 avec la Firebase CLI (`firebase deploy --only firestore:rules,firestore:indexes,storage`).
 
+## ✅ Comment vérifier que ça fonctionne vraiment
+
+Deux pièges fréquents à ce stade :
+
+1. **"Analytics" (page d'accueil du projet) ≠ Firestore.** Le widget "Données
+   analytiques" / "Utilisateurs actifs par jour" que vous voyez sur la page d'accueil
+   Firebase appartient à **Google Analytics**, un produit Firebase totalement séparé
+   qui n'est PAS intégré dans ce projet (pas de SDK Analytics ajouté). C'est normal
+   qu'il affiche "Aucune donnée" — ça ne dit rien sur l'état de Firestore. Pour voir si
+   vos boutiques/produits sont bien synchronisés, allez plutôt dans
+   **Build → Firestore Database → onglet "Data"** : vous devriez y voir des
+   collections `shops` et `products` apparaître après avoir créé une boutique/publié
+   un produit dans l'app.
+2. **"Anonyme" doit être activé dans Authentication**, pas "Téléphone" (une
+   instruction plus bas dans ce document mentionnait par erreur "Téléphone" — c'est
+   corrigé). Le code utilise `signInAnonymously()` ; si le fournisseur "Anonyme" n'est
+   pas activé (**Build → Authentication → Sign-in method → Anonyme**), chaque tentative
+   de connexion échoue silencieusement (rattrapée par un `try/catch`), et donc **rien
+   n'est jamais envoyé à Firestore**, sans aucune erreur visible dans l'app elle-même.
+   C'est la cause la plus probable si vous ne voyez toujours rien après avoir vérifié
+   le point 1.
+
+Pour diagnostiquer précisément : ouvrez **Logcat** dans Android Studio (ou
+`adb logcat | grep YaarFirestoreSync` en ligne de commande) pendant que vous utilisez
+l'app. Chaque tentative de synchronisation est maintenant journalisée sous le tag
+`YaarFirestoreSync` :
+- `"Connexion Firebase anonyme OK"` → tout va bien, la connexion Firebase fonctionne.
+- `"Connexion Firebase impossible..."` → très probablement "Anonyme" pas encore activé
+  (point 2 ci-dessus), ou pas de réseau au moment du test.
+- `"Boutique/Produit ... synchronisé(e)"` → l'écriture vers Firestore a réussi ; le
+  document devrait être visible dans Firestore Database → Data quelques secondes après.
+- `"Échec de synchro pour..."` → le message d'erreur qui suit indique la cause exacte
+  (souvent : règles de sécurité Firestore non déployées, ou base Firestore pas encore
+  créée dans la console).
+
 **Pas encore branché** (périmètre volontairement limité pour cette première mise en
 ligne, afin de limiter les risques) : synchronisation des comptes utilisateurs, du
 panier, des notifications "intéressé", des campagnes publicitaires et des photos de
@@ -160,7 +195,11 @@ mais voici exactement la marche à suivre :
 5. **Build → Storage** → Commencer → mode production (règles déjà prêtes dans
    `storage.rules`).
 6. **Build → Authentication** → Commencer → onglet "Sign-in method" → activez
-   **Téléphone**.
+   **Anonyme** ("Anonymous"). ⚠️ C'est bien "Anonyme" qu'il faut activer, pas
+   "Téléphone" — c'est ce que le code utilise actuellement
+   (`FirebaseModule.ensureSignedIn()`, connexion automatique sans écran de connexion).
+   "Téléphone" n'est mentionné ailleurs dans ce document que comme piste
+   d'amélioration future, pas encore implémentée.
 7. Pour les **Cloud Functions** (`functions/index.js`, moteur d'exposition partagé +
    notifications push) : elles nécessitent de passer le projet au plan **Blaze**
    (pay-as-you-go). Ce n'est pas gratuit "Spark", MAIS le plan Blaze reste gratuit
@@ -348,3 +387,33 @@ vendeur (et pas seulement une ligne dans la liste "Notifications" de l'app) :
    notification que si `notificationsEnabled == true`, puis appelle
    `admin.messaging().send(...)`. Rien à écrire — juste à déployer (voir
    `firebase deploy --only functions` plus haut, nécessite le plan Blaze).
+
+## ❓ Faut-il retoucher Firebase à chaque mise à jour de l'app ?
+
+**La plupart du temps, non.** Une mise à jour qui ne touche pas aux fonctionnalités
+listées ci-dessous (nouvel écran, correction de bug, changement visuel, nouvelle
+logique 100% locale...) n'a besoin d'aucune action côté Firebase — vous recompilez et
+republiez l'app, c'est tout.
+
+**Une action côté Firebase est nécessaire uniquement si vous :**
+- **Ajoutez un nouveau champ lu/écrit dans Firestore** sur `shops` ou `products` → rien
+  à faire dans la console (Firestore n'a pas de schéma rigide), mais pensez à mettre à
+  jour `firestore.rules` si ce champ doit être protégé différemment des autres.
+- **Synchronisez une nouvelle collection** (ex. étendre la synchro à `interests` ou
+  `ad_campaigns`, comme évoqué plus haut) → ajouter les règles correspondantes dans
+  `firestore.rules`, et les redéployer : `firebase deploy --only firestore:rules`.
+- **Ajoutez une nouvelle requête filtrée/triée** (ex. `whereEqualTo` + `orderBy`
+  combinés sur des champs pas encore indexés ensemble) → Firestore vous demandera de
+  créer un index composite (message d'erreur avec un lien direct pour le créer en un
+  clic, ou ajout manuel dans `firestore.indexes.json` + redéploiement).
+- **Modifiez `functions/index.js`** → redéployer avec
+  `firebase deploy --only functions`.
+- **Changez le nom de package de l'app** (`applicationId`, actuellement
+  `com.yaarapp.app`) → il faudrait ré-enregistrer l'app dans Firebase et récupérer un
+  nouveau `google-services.json`. À éviter sauf raison majeure.
+
+En résumé : le code Android et la configuration Firebase (règles, index, fonctions)
+évoluent **indépendamment** la plupart du temps ; ils ne doivent être synchronisés
+que lorsqu'une mise à jour touche concrètement à la structure des données partagées
+ou aux règles de sécurité.
+

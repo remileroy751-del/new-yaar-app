@@ -12,7 +12,7 @@ import com.yaarapp.app.data.Country
 import com.yaarapp.app.data.Interest
 import com.yaarapp.app.data.InterestStatus
 import com.yaarapp.app.data.Product
-import com.yaarapp.app.data.Sex
+import com.yaarapp.app.data.ProductCategories
 import com.yaarapp.app.data.Shop
 import com.yaarapp.app.data.ShopLimits
 import com.yaarapp.app.data.User
@@ -81,9 +81,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     /** @param localWhatsappNumber numéro tel que tapé par l'utilisateur, sans l'indicatif pays. */
     fun signUp(
         firstName: String,
-        sex: Sex,
         localWhatsappNumber: String,
-        password: String,
         onDone: () -> Unit
     ) {
         val country = _onboardingCountry.value
@@ -98,7 +96,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
         val whatsappNumber = PhoneFormat.formatWhatsapp(country, localWhatsappNumber)
         viewModelScope.launch {
-            when (val result = repository.signUp(firstName, sex, country, city, whatsappNumber, password)) {
+            when (val result = repository.signUp(firstName, country, city, whatsappNumber)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user
@@ -109,9 +107,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
-    fun login(whatsappNumber: String, password: String, onDone: () -> Unit) {
+    /** Connexion par numéro WhatsApp uniquement (déjà au format complet "00<indicatif><numéro>"). */
+    fun login(whatsappNumber: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            when (val result = repository.login(whatsappNumber, password)) {
+            when (val result = repository.login(whatsappNumber)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user
@@ -152,8 +151,8 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     val allProducts: StateFlow<List<Product>> =
         repository.observeMarketplaceProducts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val categories: StateFlow<List<String>> =
-        repository.observeCategories().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** Liste fixe (voir ProductCategories) — toujours affichée en entier, même sans produit encore publié. */
+    val categories: List<String> = ProductCategories.all
 
     private val _selectedCategory = MutableStateFlow<String?>(null)
     val selectedCategory: StateFlow<String?> = _selectedCategory

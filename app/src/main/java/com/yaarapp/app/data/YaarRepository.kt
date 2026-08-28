@@ -1,7 +1,6 @@
 package com.yaarapp.app.data
 
 import android.content.Context
-import com.yaarapp.app.util.PasswordHasher
 import kotlinx.coroutines.flow.Flow
 
 sealed class AuthResult {
@@ -34,37 +33,22 @@ class YaarRepository(context: Context) {
     /** À appeler une fois au démarrage de l'app (voir YaarApplication.onCreate). */
     fun startRemoteSync() = firestoreSync.startRemoteSync()
 
-    // ---------- Amorçage des données de démonstration ----------
-
-    suspend fun seedIfEmpty() {
-        if (userDao.count() > 0) return
-        val users = SeedData.demoUsers()
-        val fashionOwnerId = userDao.insert(users[0]).toInt()
-        val electroOwnerId = userDao.insert(users[1]).toInt()
-
-        val shops = SeedData.demoShops(fashionOwnerId, electroOwnerId)
-        val fashionShopId = shopDao.insert(shops[0]).toInt()
-        val electroShopId = shopDao.insert(shops[1]).toInt()
-
-        productDao.insertAll(SeedData.demoProducts(fashionShopId, electroShopId))
-    }
-
     // ---------- Authentification (locale, voir data/User.kt) ----------
 
     /**
+     * Inscription minimale : pays, ville, prénom et numéro WhatsApp — pas de mot de
+     * passe (voir la note de sécurité dans data/User.kt).
      * @param whatsappNumber déjà normalisé au format "00" + indicatif + numéro local
      * (voir [com.yaarapp.app.util.PhoneFormat]).
      */
     suspend fun signUp(
         firstName: String,
-        sex: Sex,
         country: Country,
         city: String,
-        whatsappNumber: String,
-        password: String
+        whatsappNumber: String
     ): AuthResult {
-        if (firstName.isBlank() || city.isBlank() || password.length < 4) {
-            return AuthResult.Error("Merci de remplir tous les champs (mot de passe : 4 caractères minimum).")
+        if (firstName.isBlank() || city.isBlank()) {
+            return AuthResult.Error("Merci de renseigner votre prénom.")
         }
         if (whatsappNumber.length < 10) {
             return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
@@ -74,23 +58,19 @@ class YaarRepository(context: Context) {
         }
         val user = User(
             firstName = firstName,
-            sex = sex,
             country = country,
             city = city,
-            whatsappNumber = whatsappNumber,
-            passwordHash = PasswordHasher.hash(password)
+            whatsappNumber = whatsappNumber
         )
         val id = userDao.insert(user)
         session.setCurrentUser(id.toInt())
         return AuthResult.Success(user.copy(id = id.toInt()))
     }
 
-    suspend fun login(whatsappNumber: String, password: String): AuthResult {
+    /** Connexion par numéro WhatsApp uniquement — pas de mot de passe (voir data/User.kt). */
+    suspend fun login(whatsappNumber: String): AuthResult {
         val user = userDao.findByWhatsapp(whatsappNumber)
             ?: return AuthResult.Error("Aucun compte trouvé avec ce numéro WhatsApp.")
-        if (!PasswordHasher.matches(password, user.passwordHash)) {
-            return AuthResult.Error("Mot de passe incorrect.")
-        }
         session.setCurrentUser(user.id)
         return AuthResult.Success(user)
     }

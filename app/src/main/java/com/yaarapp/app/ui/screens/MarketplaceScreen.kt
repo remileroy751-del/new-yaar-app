@@ -1,5 +1,7 @@
 package com.yaarapp.app.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,6 +24,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +43,7 @@ fun MarketplaceScreen(
     onSearchClick: () -> Unit = {}
 ) {
     val products by viewModel.filteredProducts.collectAsStateWithLifecycle()
-    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val categories = viewModel.categories
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val cartCount by viewModel.cartItemCount.collectAsStateWithLifecycle()
 
@@ -69,40 +72,45 @@ fun MarketplaceScreen(
             )
         }
     ) { padding ->
-        if (products.isEmpty()) {
-            androidx.compose.foundation.layout.Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-            ) {
-                Text("Aucun produit en vente pour le moment.")
-            }
-            return@Scaffold
-        }
-
+        // Les catégories (liste fixe) restent toujours visibles en haut de la page
+        // d'accueil, même s'il n'y a encore aucun produit publié.
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
             contentPadding = PaddingValues(16.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (categories.isNotEmpty()) {
-                item(span = { GridItemSpan(2) }) {
-                    CategoryChipsRow(
-                        categories = categories,
-                        selected = selectedCategory,
-                        onSelect = { viewModel.selectCategory(it) },
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
+            item(span = { GridItemSpan(2) }) {
+                CategoryChipsRow(
+                    categories = categories,
+                    selected = selectedCategory,
+                    onSelect = { viewModel.selectCategory(it) },
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
             }
-            items(products, key = { it.id }) { product ->
-                ProductCard(product = product, onClick = { onProductClick(product) })
+
+            if (products.isEmpty()) {
+                item(span = { GridItemSpan(2) }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            if (selectedCategory != null) "Aucun produit dans cette catégorie pour le moment."
+                            else "Aucun produit en vente pour le moment."
+                        )
+                    }
+                }
+            } else {
+                items(products, key = { it.id }) { product ->
+                    ProductCard(product = product, onClick = { onProductClick(product) })
+                }
             }
         }
     }

@@ -11,13 +11,29 @@ commander directement via WhatsApp.
 - **Onboarding pays/ville** : à la toute première ouverture, l'utilisateur choisit son
   **pays** (Bénin, Burkina Faso, Côte d'Ivoire, Togo — avec drapeau) puis sa **ville**
   dans une liste alphabétique qui se réactualise automatiquement selon le pays choisi.
-  Il clique sur **Continuer** pour passer à l'inscription (Prénom, Sexe F/M, numéro
-  WhatsApp avec indicatif au format `0022890000000`, mot de passe).
-- **Comptes utilisateurs** : inscription / connexion par **numéro WhatsApp** (identifiant
-  unique) et mot de passe, session conservée entre les ouvertures de l'application.
+  Il clique sur **Continuer** pour passer à l'inscription.
+- **Inscription minimale** : nom/prénom + numéro WhatsApp, c'est tout — **aucun mot de
+  passe**. Le champ WhatsApp affiche l'**indicatif du pays en préfixe non modifiable**
+  (ex : `00228` pour le Togo, déduit automatiquement du pays choisi à l'étape
+  précédente) ; l'utilisateur ne complète que le reste de son numéro. Un message
+  rappelle qu'il est préférable d'indiquer son **vrai numéro WhatsApp**, puisque les
+  boutons "discuter sur WhatsApp" de l'application s'appuient dessus pour ouvrir une
+  conversation directe entre acheteurs et vendeurs. La **connexion** se fait ensuite en
+  ressaisissant simplement ce numéro (voir la note de sécurité dans `data/User.kt` :
+  ce choix minimise la friction à l'inscription mais n'est pas un mécanisme de
+  sécurité — à remplacer par une vraie vérification avant toute mise en production).
 - **Ma boutique** : chaque compte peut créer une boutique (pays/ville repris
   automatiquement du profil) et y publier des produits (photo, nom, description, prix
-  en FCFA, catégorie). **Limite de 5 produits actifs** pour le forfait gratuit.
+  en FCFA, catégorie choisie dans une **liste déroulante fixe** — voir plus bas).
+  **Limite de 5 produits actifs** pour le forfait gratuit.
+- **Catégories de produits** : liste fixe de 15 catégories (Vêtements, Chaussures,
+  Accessoires, Cosmétiques & Beauté, Électroménager, Électronique, Meubles & Déco,
+  Jouets & Jeux, Alimentation & Boissons, Bijoux, Sport & Loisirs, Bébé & Puériculture,
+  Auto & Moto, Santé & Bien-être, Divers — `data/ProductCategories.kt`). Le vendeur
+  **choisit obligatoirement** dans cette liste au moment de publier un produit (pas de
+  saisie libre) ; les mêmes catégories s'affichent **en permanence** en haut de la
+  page d'accueil "Acheter", même avant qu'un produit y soit publié, pour que les
+  acheteurs puissent filtrer par catégorie dès le premier lancement.
   - Tout produit publié gratuitement se **désactive automatiquement au bout de 14
     jours** ; à l'ouverture de sa boutique, le vendeur voit une **notification**
     l'invitant à vérifier ses produits.
@@ -77,18 +93,18 @@ commander directement via WhatsApp.
   1:1 et publiées dans deux boutiques de test pour que le fil "Acheter" ne soit pas
   vide au premier lancement (voir comptes de test ci-dessous).
 
-## 🔑 Comptes de test (données de démonstration)
+## 🧪 Tester l'application
 
-| Boutique       | Numéro WhatsApp   | Mot de passe | Ville          |
-|----------------|--------------------|--------------|----------------|
-| Chic & Style   | 0022890000001      | test1234     | Lomé (Togo)    |
-| Yaar Électro   | 0022990000002      | test1234     | Cotonou (Bénin)|
+Il n'y a plus de comptes ni de produits de démonstration : la base est **vide au
+premier lancement**, pour tester dans des conditions réelles. Créez votre propre
+compte depuis l'écran d'inscription (pays, ville, prénom, numéro WhatsApp), créez
+votre boutique, publiez vos propres produits.
 
-Ces deux boutiques possèdent déjà des produits (sac à main, veste, chaussures pour
-Chic & Style ; tondeuse, mixeur, mini-frigo pour Yaar Électro) construits à partir des
-photos que vous avez fournies. Vous pouvez aussi créer un **nouveau compte** depuis
-l'écran d'inscription : vous verrez alors ces produits de démonstration dans l'onglet
-"Acheter", exactement comme le ferait un vrai acheteur découvrant la plateforme.
+⚠️ Si vous mettez à jour l'app depuis une version antérieure qui avait encore des
+données de démonstration, celles-ci restent dans la base locale de votre téléphone
+tant que vous ne désinstallez pas l'application (une simple mise à jour de l'APK ne
+vide pas les données déjà enregistrées). Pour repartir d'une base 100 % vide,
+désinstallez puis réinstallez l'application.
 
 ## 🟢 Synchronisation en ligne (Firebase)
 
@@ -151,21 +167,21 @@ par ville...).
 ```
 app/src/main/java/com/yaarapp/app/
 ├── MainActivity.kt              # Point d'entrée, héberge le NavHost Compose
-├── YaarApplication.kt           # Initialise la base de données et amorce les données de démo
+├── YaarApplication.kt           # Initialise la base de données et démarre la synchro Firebase
 ├── data/
 │   ├── User.kt, Shop.kt, Product.kt, CartItem.kt, Interest.kt, AdCampaign.kt  # Modèles (entités Room)
 │   ├── Location.kt              # Enum Country (pays + drapeau + indicatif) + CityRepository
-│   ├── Sex.kt, InterestStatus (dans Interest.kt), CertificationStatus.kt
+│   ├── InterestStatus (dans Interest.kt), CertificationStatus.kt
 │   ├── ShopCategories.kt        # Catégories de boutique par défaut (max 3 sélectionnables)
+│   ├── ProductCategories.kt     # Liste fixe des 15 catégories de produits (menu déroulant + accueil)
 │   ├── ShopLimits.kt            # Capacité produits (5→20, 5 000 FCFA) + AdPricing (campagnes)
 │   ├── CertificationConfig.kt   # Prix de certification boutique (10 000 FCFA)
 │   ├── UserDao.kt, ShopDao.kt, ProductDao.kt, CartDao.kt, InterestDao.kt, AdCampaignDao.kt
-│   ├── YaarDatabase.kt          # Base Room (6 tables, version 5)
+│   ├── YaarDatabase.kt          # Base Room (6 tables, version 6)
 │   ├── YaarRepository.kt        # Authentification, boutique, marketplace, panier, paiements,
 │   │                              # campagnes publicitaires, certification, notifications
 │   ├── FirestoreSync.kt         # Synchronisation Firestore/Storage (boutiques + produits)
-│   ├── SessionManager.kt        # Session (DataStore) — utilisateur connecté
-│   └── SeedData.kt              # Comptes/boutiques/produits de démonstration
+│   └── SessionManager.kt        # Session (DataStore) — utilisateur connecté
 ├── firebase/
 │   └── FirebaseModule.kt        # Accès Firestore/Storage/Auth + connexion anonyme
 ├── nav/                         # Routes + NavHost (onboarding → auth → onglets principaux)
@@ -182,21 +198,18 @@ app/src/main/java/com/yaarapp/app/
     ├── WhatsAppHelper.kt         # Construction des liens wa.me (boutique + client intéressé)
     ├── PhoneFormat.kt            # Formatage du numéro WhatsApp (00 + indicatif + numéro)
     ├── ImageStorage.kt           # Copie des photos importées + résolution des images
-    ├── PasswordHasher.kt         # Hachage simple des mots de passe (démo locale)
     ├── KkiapayConfig.kt          # Clé publique Kkiapay à renseigner (voir section paiement)
     └── KkiapayHtmlBuilder.kt     # Page HTML chargée dans la WebView de paiement
 ```
 
 ## 🛠 Personnaliser
 
-1. **Données de démonstration** — modifiables ou supprimables dans
-   `data/SeedData.kt`. Pour repartir d'une base vide, retirez simplement l'appel à
-   `repository.seedIfEmpty()` dans `YaarApplication.kt`.
+1. **Catégories de produits** — modifiables dans `data/ProductCategories.kt` (liste
+   fixe utilisée à la fois par le menu déroulant de publication et par la page
+   d'accueil).
 2. **Capacité produits / prix des campagnes / prix certification** — modifiables
    dans `data/ShopLimits.kt` (`ShopLimits`, `AdPricing`) et `data/CertificationConfig.kt`.
 3. **Logo / icône** — déjà intégrés dans `res/mipmap-*` et `res/drawable-nodpi`.
-4. **Photos produits de démonstration** — dans `res/drawable-nodpi/product_*.jpg`
-   (recadrées au format 1:1 à partir des photos que vous avez fournies).
 
 ## ▶️ Compiler le projet
 

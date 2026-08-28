@@ -10,12 +10,6 @@ class Converters {
     fun toCountry(value: String): Country = Country.valueOf(value)
 
     @TypeConverter
-    fun fromSex(sex: Sex): String = sex.name
-
-    @TypeConverter
-    fun toSex(value: String): Sex = Sex.valueOf(value)
-
-    @TypeConverter
     fun fromInterestStatus(status: InterestStatus): String = status.name
 
     @TypeConverter

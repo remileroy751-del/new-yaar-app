@@ -26,12 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import com.yaarapp.app.R
 import com.yaarapp.app.viewmodel.YaarViewModel
 
+/** Connexion par numéro WhatsApp uniquement — pas de mot de passe (voir data/User.kt). */
 @Composable
 fun LoginScreen(
     viewModel: YaarViewModel,
@@ -39,7 +39,6 @@ fun LoginScreen(
     onGoToSignUp: () -> Unit
 ) {
     var whatsapp by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     val error by viewModel.authError.collectAsState()
 
     Column(
@@ -69,16 +68,6 @@ fun LoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth()
         )
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Mot de passe") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-        )
 
         if (error != null) {
             Text(
@@ -90,7 +79,8 @@ fun LoginScreen(
         }
 
         Button(
-            onClick = { viewModel.login(whatsapp.trim(), password) { onLoggedIn() } },
+            onClick = { viewModel.login(whatsapp.trim()) { onLoggedIn() } },
+            enabled = whatsapp.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 20.dp),
@@ -108,12 +98,5 @@ fun LoginScreen(
         ) {
             Text("Pas encore de compte ? Créer un compte")
         }
-
-        Text(
-            "Compte de test : 0022890000001 / test1234",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            modifier = Modifier.padding(top = 24.dp)
-        )
     }
 }
