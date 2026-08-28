@@ -33,6 +33,11 @@ class YaarRepository(context: Context) {
     /** À appeler une fois au démarrage de l'app (voir YaarApplication.onCreate). */
     fun startRemoteSync() = firestoreSync.startRemoteSync()
 
+    /** Dernier évènement de synchronisation Firebase, en clair (pour affichage direct dans l'app). */
+    val lastSyncEvent get() = firestoreSync.lastSyncEvent
+
+    fun clearLastSyncEvent() = firestoreSync.clearLastSyncEvent()
+
     // ---------- Authentification (locale, voir data/User.kt) ----------
 
     /**

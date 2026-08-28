@@ -8,6 +8,8 @@ import com.yaarapp.app.firebase.FirebaseModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
@@ -49,6 +51,29 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     private val shopsCollection get() = firestore.collection("shops")
     private val productsCollection get() = firestore.collection("products")
 
+    /**
+     * Dernier évènement de synchronisation, en clair, pour affichage direct dans l'app
+     * (voir la bannière dans MyShopScreen) — utile pour diagnostiquer sans outil externe
+     * (Logcat/ADB), puisque la plupart des lecteurs de journaux du Play Store ne peuvent
+     * pas voir les journaux d'une autre application sur un téléphone non rooté.
+     */
+    private val _lastSyncEvent = MutableStateFlow<String?>(null)
+    val lastSyncEvent: StateFlow<String?> = _lastSyncEvent
+
+    fun clearLastSyncEvent() {
+        _lastSyncEvent.value = null
+    }
+
+    private fun reportSuccess(message: String) {
+        Log.i(TAG, message)
+        _lastSyncEvent.value = "✅ $message"
+    }
+
+    private fun reportFailure(message: String) {
+        Log.w(TAG, message)
+        _lastSyncEvent.value = "❌ $message"
+    }
+
     // ---------- Écoute temps réel : reflète Firestore vers Room ----------
 
     private var listenersStarted = false
@@ -60,9 +85,9 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         syncScope.launch {
             try {
                 FirebaseModule.ensureSignedIn()
-                Log.i(TAG, "Connexion Firebase anonyme OK — écoute temps réel démarrée.")
+                reportSuccess("Connexion Firebase anonyme OK — écoute temps réel démarrée.")
             } catch (e: Exception) {
-                Log.w(TAG, "Connexion Firebase impossible au démarrage (pas de réseau, ou " +
+                reportFailure("Connexion Firebase impossible au démarrage (pas de réseau, ou " +
                     "\"Anonyme\" non activé dans Firebase Auth ?) : ${e.message}")
                 listenersStarted = false
                 return@launch // pas de réseau au lancement : on retentera au prochain appel de synchro
@@ -140,9 +165,9 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 if (toSync.remoteId != shop.remoteId || toSync.logoUrl != shop.logoUrl) {
                     shopDao.update(toSync)
                 }
-                Log.i(TAG, "Boutique \"${shop.name}\" synchronisée (document ${docRef.id}).")
+                reportSuccess("Boutique \"${shop.name}\" synchronisée (document ${docRef.id}).")
             } catch (e: Exception) {
-                Log.w(TAG, "Échec de synchro pour la boutique \"${shop.name}\" : ${e.message}")
+                reportFailure("Échec de synchro pour la boutique \"${shop.name}\" : ${e.message}")
                 // Pas de réseau, ou erreur Firestore : la boutique reste utilisable en local ;
                 // la prochaine modification (ou le prochain lancement) retentera la synchro.
             }
@@ -161,9 +186,9 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 if (toSync.remoteId != product.remoteId || toSync.imageUrl != product.imageUrl) {
                     productDao.update(toSync)
                 }
-                Log.i(TAG, "Produit \"${product.name}\" synchronisé (document ${docRef.id}).")
+                reportSuccess("Produit \"${product.name}\" synchronisé (document ${docRef.id}).")
             } catch (e: Exception) {
-                Log.w(TAG, "Échec de synchro pour le produit \"${product.name}\" : ${e.message}")
+                reportFailure("Échec de synchro pour le produit \"${product.name}\" : ${e.message}")
                 // Idem : échec silencieux, la synchro réessaiera plus tard.
             }
         }

@@ -227,6 +227,14 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
     // ---------- Ma boutique ----------
 
+    /**
+     * Dernier évènement de synchronisation Firebase (succès ✅ ou échec ❌), affiché en
+     * bannière dans "Ma boutique" — permet de diagnostiquer sans outil externe.
+     */
+    val lastSyncEvent: StateFlow<String?> = repository.lastSyncEvent
+
+    fun dismissLastSyncEvent() = repository.clearLastSyncEvent()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val myShop: StateFlow<Shop?> = currentUserId.flatMapLatest { id ->
         if (id == null) emptyFlow() else repository.observeMyShop(id)

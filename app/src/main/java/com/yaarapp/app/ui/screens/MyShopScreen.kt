@@ -100,6 +100,7 @@ fun MyShopScreen(
     val products by viewModel.myShopProducts.collectAsStateWithLifecycle()
     val expiredNotice by viewModel.expiredNotice.collectAsStateWithLifecycle()
     val unreadCount by viewModel.unreadInterestCount.collectAsStateWithLifecycle()
+    val lastSyncEvent by viewModel.lastSyncEvent.collectAsStateWithLifecycle()
     val maxProducts = shop!!.maxProducts
     val activeCount = products.count { it.isActive }
 
@@ -137,6 +138,34 @@ fun MyShopScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (lastSyncEvent != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (lastSyncEvent!!.startsWith("✅"))
+                            MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "Synchronisation en ligne (Firebase)",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(lastSyncEvent ?: "", style = MaterialTheme.typography.bodySmall)
+                        TextButton(
+                            onClick = { viewModel.dismissLastSyncEvent() },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Compris")
+                        }
+                    }
+                }
+            }
             if (expiredNotice != null) {
                 Card(
                     modifier = Modifier
