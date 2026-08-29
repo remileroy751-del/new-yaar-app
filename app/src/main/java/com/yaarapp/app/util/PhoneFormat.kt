@@ -16,9 +16,14 @@ object PhoneFormat {
         return "00${country.callingCode}$digits"
     }
 
-    /** Un numéro local raisonnable pour l'Afrique de l'Ouest fait entre 8 et 9 chiffres. */
+    /**
+     * Longueur d'un numéro local en Afrique de l'Ouest : la plupart des pays sont à
+     * 8 chiffres, mais la Côte d'Ivoire est passée à 10 chiffres après l'indicatif
+     * depuis 2021 — on accepte donc de 8 à 10 chiffres pour rester compatible avec
+     * tous les pays proposés, sans bloquer un numéro ivoirien valide à 10 chiffres.
+     */
     fun isValidLocalNumber(localNumber: String): Boolean {
         val digits = localDigitsOnly(localNumber)
-        return digits.length in 8..9
+        return digits.length in 8..10
     }
 }

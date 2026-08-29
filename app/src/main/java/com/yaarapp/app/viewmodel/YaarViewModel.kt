@@ -250,19 +250,21 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
     fun createShop(
         name: String,
-        whatsappNumber: String,
         logoUrl: String?,
         activityDescription: String,
         categories: List<String>,
         onDone: () -> Unit
     ) {
         val owner = _currentUser.value
-        if (owner == null || name.isBlank() || whatsappNumber.isBlank()) {
-            _shopCreationError.value = "Merci de renseigner le nom de la boutique et le numéro WhatsApp."
+        if (owner == null || name.isBlank()) {
+            _shopCreationError.value = "Merci de renseigner le nom de la boutique."
             return
         }
         viewModelScope.launch {
-            repository.createShop(owner, name, whatsappNumber, logoUrl, activityDescription, categories)
+            // Le numéro WhatsApp de la boutique est automatiquement celui du compte
+            // connecté (déjà saisi une seule fois à l'inscription) — pas besoin de le
+            // ressaisir ici.
+            repository.createShop(owner, name, owner.whatsappNumber, logoUrl, activityDescription, categories)
             _shopCreationError.value = null
             onDone()
         }

@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -61,7 +60,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -85,8 +83,8 @@ fun MyShopScreen(
     val error by viewModel.shopCreationError.collectAsStateWithLifecycle()
 
     if (shop == null) {
-        CreateShopForm(error = error) { name, whatsapp, logoUrl, activity, categories ->
-            viewModel.createShop(name, whatsapp, logoUrl, activity, categories) {}
+        CreateShopForm(error = error) { name, logoUrl, activity, categories ->
+            viewModel.createShop(name, logoUrl, activity, categories) {}
         }
         return
     }
@@ -288,11 +286,10 @@ fun MyShopScreen(
 @Composable
 private fun CreateShopForm(
     error: String?,
-    onCreate: (name: String, whatsapp: String, logoUrl: String?, activity: String, categories: List<String>) -> Unit
+    onCreate: (name: String, logoUrl: String?, activity: String, categories: List<String>) -> Unit
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
-    var whatsapp by remember { mutableStateOf("") }
     var activity by remember { mutableStateOf("") }
     var pickedLogoUri by remember { mutableStateOf<Uri?>(null) }
     var selectedCategories by remember { mutableStateOf(setOf<String>()) }
@@ -315,7 +312,7 @@ private fun CreateShopForm(
             modifier = Modifier.padding(top = 12.dp, bottom = 20.dp)
         )
         Text(
-            "Chaque compte peut ouvrir une boutique et publier jusqu'à 5 produits gratuitement (au-delà, désactivez ou remettez en vente vos articles pour continuer à publier).",
+            "Chaque compte peut ouvrir une boutique et publier jusqu'à 5 produits gratuitement (au-delà, désactivez ou remettez en vente vos articles pour continuer à publier). Le numéro WhatsApp de votre compte servira automatiquement de numéro de contact pour cette boutique.",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
@@ -356,18 +353,9 @@ private fun CreateShopForm(
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
-            value = whatsapp,
-            onValueChange = { whatsapp = it },
-            label = { Text("Numéro WhatsApp de la boutique") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-        )
-        OutlinedTextField(
             value = activity,
             onValueChange = { activity = it },
-            label = { Text("Décrivez l'activité de votre boutique") },
+            label = { Text("Description de la boutique") },
             minLines = 2,
             modifier = Modifier
                 .fillMaxWidth()
@@ -375,7 +363,7 @@ private fun CreateShopForm(
         )
 
         Text(
-            "Catégories de la boutique (jusqu'à ${ShopCategories.MAX_SELECTABLE})",
+            "Catégories de la boutique (${ShopCategories.MAX_SELECTABLE} au choix)",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
@@ -418,14 +406,14 @@ private fun CreateShopForm(
         Button(
             onClick = {
                 val logoUrl = pickedLogoUri?.let { ImageStorage.saveToInternalStorage(context, it) }
-                onCreate(name.trim(), whatsapp.trim(), logoUrl, activity.trim(), selectedCategories.toList())
+                onCreate(name.trim(), logoUrl, activity.trim(), selectedCategories.toList())
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 20.dp),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text("Créer ma boutique")
+            Text("Créer la boutique")
         }
     }
 }
