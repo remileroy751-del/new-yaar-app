@@ -1,37 +1,83 @@
 package com.yaarapp.app.firebase
 
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.firestore
-import com.google.firebase.storage.storage
+import android.content.Context
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 
 /**
- * Point d'accès unique aux services Firebase utilisés par l'app.
+ * Point d'accès unique aux services Firebase utilisés par Yaar-App.
  *
- * Ce fichier nécessite que `app/google-services.json` soit présent (voir
- * BACKEND_FIREBASE.md) — sans lui, les dépendances Firebase ne sont pas incluses par
- * Gradle et ce fichier ne compilerait pas. Comme le fichier est maintenant en place,
- * tout est actif.
+ * Firebase est initialisé explicitement au démarrage de l'application. Cette étape est
+ * volontaire : elle évite l'erreur "Default FirebaseApp is not initialized" lorsque
+ * l'initialisation automatique n'a pas encore eu lieu au moment où un repository démarre.
+ *
+ * La configuration elle-même vient de app/google-services.json, traité par le plugin
+ * com.google.gms.google-services pendant la compilation.
  */
 object FirebaseModule {
-    val auth by lazy { Firebase.auth }
-    val firestore by lazy { Firebase.firestore }
-    val storage by lazy { Firebase.storage }
+
+    @Volatile
+    private var initialized = false
 
     /**
-     * Connexion anonyme automatique : chaque installation de l'app obtient une identité
-     * Firebase stable (sans mot de passe ni numéro à vérifier), ce qui suffit à satisfaire
-     * les règles de sécurité Firestore/Storage ("request.auth != null") sans imposer un
-     * vrai écran de connexion Firebase en plus du système de compte local existant.
-     *
-     * Amélioration future possible : remplacer par une vraie connexion par numéro de
-     * téléphone (Firebase Auth Phone) pour relier chaque compte local à une identité
-     * Firebase persistante et permettre des règles plus strictes par propriétaire.
+     * Initialise l'application Firebase par défaut si elle ne l'est pas déjà.
+     * Retourne true si Firebase est disponible, false si la configuration générée par
+     * google-services.json est absente/invalide.
+     */
+    @Synchronized
+    fun initialize(context: Context): Boolean {
+        if (initialized) return true
+
+        val appContext = context.applicationContext
+        val existing = FirebaseApp.getApps(appContext)
+            .firstOrNull { it.name == FirebaseApp.DEFAULT_APP_NAME }
+
+        if (existing != null) {
+            initialized = true
+            return true
+        }
+
+        val app = FirebaseApp.initializeApp(appContext)
+        initialized = app != null
+        return initialized
+    }
+
+    /** Indique si l'application Firebase par défaut est actuellement disponible. */
+    fun isInitialized(context: Context): Boolean =
+        FirebaseApp.getApps(context.applicationContext)
+            .any { it.name == FirebaseApp.DEFAULT_APP_NAME }
+
+    private fun requireDefaultApp(): FirebaseApp = try {
+        FirebaseApp.getInstance()
+    } catch (e: IllegalStateException) {
+        throw IllegalStateException(
+            "Firebase n'est pas initialisé. Vérifiez app/google-services.json et le plugin Google Services.",
+            e
+        )
+    }
+
+    val auth: FirebaseAuth
+        get() = FirebaseAuth.getInstance(requireDefaultApp())
+
+    val firestore: FirebaseFirestore
+        get() = FirebaseFirestore.getInstance(requireDefaultApp())
+
+    val storage: FirebaseStorage
+        get() = FirebaseStorage.getInstance(requireDefaultApp())
+
+    /**
+     * Connexion anonyme automatique : chaque installation obtient une identité Firebase
+     * stable, suffisante pour satisfaire les règles actuelles request.auth != null.
      */
     suspend fun ensureSignedIn(): String {
-        auth.currentUser?.let { return it.uid }
+        val current = auth.currentUser
+        if (current != null) return current.uid
+
         val result = auth.signInAnonymously().await()
-        return result.user?.uid.orEmpty()
+        return result.user?.uid
+            ?: throw IllegalStateException("Firebase Auth a réussi mais aucun utilisateur n'a été retourné.")
     }
 }

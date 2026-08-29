@@ -10,7 +10,6 @@
 *.apk
 *.aab
 
-# Firebase — ne jamais committer sur un dépôt public : contient des identifiants
-# de projet. Ajoutez-le vous-même en local (voir BACKEND_FIREBASE.md), ou passez-le
-# en secret GitHub Actions pour la CI (voir le commentaire dans le workflow).
-app/google-services.json
+# Firebase : google-services.json est une configuration cliente Android.
+# Il peut être versionné dans ce projet pour permettre une compilation GitHub directe.
+# Alternative : fournir son contenu via le secret GOOGLE_SERVICES_JSON dans GitHub Actions.

@@ -164,15 +164,13 @@ Firebase, puis déployer ces fichiers avec la Firebase CLI.
 > majeure à part qui aurait exigé de renommer tous les imports du projet — pas
 > nécessaire ici, volontairement évité).
 
-> **Compiler sans `google-services.json`** : les dépendances Firebase (Firestore,
-> Auth, Storage, Messaging) sont toujours incluses dans `app/build.gradle.kts`, que
-> le fichier soit présent ou non — seul le PLUGIN Google Services (qui exige le
-> fichier pour s'exécuter) reste conditionnel. Résultat : **le projet compile dans
-> tous les cas**, y compris en CI sans le secret `GOOGLE_SERVICES_JSON` configuré.
-> Sans Firebase correctement configuré au runtime, les appels de synchronisation
-> échouent proprement (rattrapés par un `try/catch` dans `data/FirestoreSync.kt`) et
-> l'app fonctionne alors en mode 100% local, exactement comme avant l'intégration
-> Firebase.
+> **Compilation Firebase obligatoire** : la version distribuée de Yaar-App refuse désormais
+> de compiler si `app/google-services.json` est absent. Cela évite de générer par erreur
+> un APK qui fonctionnerait uniquement en local. Le workflow GitHub peut restaurer ce
+> fichier depuis le secret `GOOGLE_SERVICES_JSON` si vous ne souhaitez pas le versionner.
+> L'application initialise ensuite explicitement `FirebaseApp` au démarrage avant de
+> créer le repository, ce qui corrige l'erreur `Default FirebaseApp is not initialized`.
+
 
 ## Étapes pour créer le projet Firebase (à faire vous-même, ~15 min)
 
@@ -187,8 +185,7 @@ mais voici exactement la marche à suivre :
    - Nom du package : `com.yaarapp.app` (doit correspondre exactement à
      `applicationId` dans `app/build.gradle.kts`).
    - Téléchargez le fichier **`google-services.json`** généré et placez-le dans
-     `YaarApp/app/google-services.json` (à la racine du dossier `app`). **Envoyez-le
-     moi directement dans la conversation et je l'installe pour vous.**
+     `YaarApp/app/google-services.json` (à la racine du dossier `app`).
 4. **Build → Firestore Database** → Créer une base de données → région proche
    (ex. `europe-west1`) → mode production (les règles sont déjà prêtes, voir
    `firestore.rules` — pas besoin de les retaper à la main, la CLI les déploie).
@@ -417,3 +414,22 @@ En résumé : le code Android et la configuration Firebase (règles, index, fonc
 que lorsqu'une mise à jour touche concrètement à la structure des données partagées
 ou aux règles de sécurité.
 
+
+## Correction importante — compilation GitHub Actions
+
+La version actuelle de Yaar-App initialise Firebase explicitement dans `YaarApplication`.
+Le build refuse maintenant de produire un APK si `app/google-services.json` est absent,
+afin d'éviter de distribuer par erreur une version locale sans connexion Firebase.
+
+Deux méthodes sont possibles :
+
+1. **Méthode simple pour ce dépôt** : conserver `app/google-services.json` dans GitHub.
+   Le fichier fourni dans ce projet correspond à `com.yaarapp.app` et au projet Firebase
+   `yaarapp-6c4ae`.
+2. **Méthode recommandée pour un dépôt public** : créer dans GitHub
+   `Settings → Secrets and variables → Actions` un secret nommé
+   `GOOGLE_SERVICES_JSON`, contenant le contenu complet du fichier. Le workflow le
+   restaurera automatiquement avant la compilation.
+
+Le workflow vérifie également que le JSON contient bien la configuration Android pour
+`com.yaarapp.app`. Il génère maintenant un APK debug et un APK release comme artefacts.

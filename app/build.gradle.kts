@@ -8,16 +8,17 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// Le plugin Google Services (Firebase) exige que google-services.json existe pour
-// s'exécuter (sinon erreur de configuration Gradle) — il n'est donc appliqué QUE si
-// ce fichier est présent dans ce dossier (app/). Les DÉPENDANCES Firebase, elles,
-// restent toujours incluses (voir plus bas) : le code compile dans tous les cas, et
-// se dégrade proprement en mode 100% local au runtime si Firebase n'est pas configuré
-// (voir data/FirestoreSync.kt) — voir BACKEND_FIREBASE.md pour l'ajouter.
-val hasFirebaseConfig = file("google-services.json").exists()
-if (hasFirebaseConfig) {
-    apply(plugin = "com.google.gms.google-services")
+// Yaar-App est une marketplace en ligne : Firebase est donc obligatoire pour la
+// version distribuée. Le plugin Google Services doit traiter app/google-services.json
+// pendant chaque compilation afin de générer les ressources Firebase utilisées par
+// FirebaseApp.initializeApp(). Si le fichier manque, on préfère faire échouer la
+// compilation plutôt que produire un APK qui fonctionne seulement en local.
+val firebaseConfig = file("google-services.json")
+check(firebaseConfig.exists()) {
+    "google-services.json est introuvable dans app/. " +
+        "Ajoutez le fichier Firebase ou configurez le secret GitHub Actions GOOGLE_SERVICES_JSON."
 }
+apply(plugin = "com.google.gms.google-services")
 
 android {
     namespace = "com.yaarapp.app"
@@ -108,13 +109,7 @@ dependencies {
     // DataStore for simple prefs (onboarding flag, delivery zone, etc.)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Firebase — dépendances TOUJOURS incluses (indépendamment de la présence de
-    // google-services.json), pour que le projet compile dans tous les cas — y compris
-    // en CI sans le secret GOOGLE_SERVICES_JSON configuré. Sans configuration Firebase
-    // valide au runtime, les appels Firebase échouent proprement et sont rattrapés
-    // (try/catch) dans data/FirestoreSync.kt : l'app continue de fonctionner en local.
-    // Seul le PLUGIN Google Services reste conditionnel (lui exige le fichier pour
-    // pouvoir s'exécuter, voir plus haut).
+    // Firebase — configuration obligatoire pour la version en ligne.
     // Le BOM gère les versions compatibles entre les modules Firebase automatiquement.
     // Depuis le BoM 34.0.0 (juillet 2025), Firebase a retiré les modules "-ktx" séparés :
     // les API Kotlin (ex. Firebase.firestore) sont désormais directement dans les modules

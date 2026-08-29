@@ -20,44 +20,52 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Installe Gradle 8.13 (version minimale exigée par AGP 8.13.2, voir build.gradle.kts
-      # racine) de façon fiable, indépendamment de la version de Gradle préinstallée sur
-      # la machine GitHub Actions (qui peut changer sans prévenir — c'est ce qui avait
-      # cassé une première fois la génération de wrapper via "gradle wrapper ...").
       - name: Setup Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
-      - name: Restore google-services.json (Firebase, si configuré)
-        # Une fois Firebase configuré (voir BACKEND_FIREBASE.md), collez le contenu
-        # de votre app/google-services.json dans un secret de dépôt nommé
-        # GOOGLE_SERVICES_JSON (Settings → Secrets and variables → Actions → New
-        # repository secret). Sans ce secret, l'APK compile quand même (les
-        # dépendances Firebase sont toujours incluses), mais la synchronisation en
-        # ligne ne fonctionnera pas au lancement de l'app — juste le mode 100% local.
-        #
-        # NOTE : le contexte "secrets" ne peut PAS être utilisé dans une condition
-        # "if:" d'étape (restriction de GitHub Actions, pas une erreur de syntaxe) —
-        # la vérification "secret vide ou non" se fait donc DANS le script shell
-        # ci-dessous plutôt que dans une condition "if:".
+      - name: Restore Firebase configuration
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
+          # Si un secret est configuré, il est prioritaire. Sinon, le fichier peut
+          # être versionné dans app/google-services.json (Firebase client config).
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
-            echo "google-services.json restauré depuis le secret GOOGLE_SERVICES_JSON."
-          else
-            echo "Secret GOOGLE_SERVICES_JSON non configuré : compilation sans Firebase actif (mode local)."
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json restauré depuis le secret GitHub."
           fi
 
-      # "gradle" ici résout vers la version 8.13 installée par setup-gradle ci-dessus
-      # (pas de wrapper committé dans ce dépôt — voir note dans README.md).
+          if [ ! -s app/google-services.json ]; then
+            echo "ERREUR: app/google-services.json est absent."
+            echo "Ajoutez ce fichier au dépôt OU créez le secret GitHub Actions GOOGLE_SERVICES_JSON."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path("app/google-services.json")
+          data = json.loads(p.read_text())
+          clients = data.get("client", [])
+          package_names = [
+              c.get("client_info", {}).get("android_client_info", {}).get("package_name")
+              for c in clients
+          ]
+          if "com.yaarapp.app" not in package_names:
+              raise SystemExit(
+                  "ERREUR: google-services.json ne contient pas la configuration Android "
+                  "pour com.yaarapp.app."
+              )
+          print("Configuration Firebase valide pour com.yaarapp.app.")
+          PY
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
 
-      - name: Upload APK artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: yaar-app-debug
           path: app/build/outputs/apk/debug/*.apk
+
