@@ -20,6 +20,12 @@ interface ShopDao {
     @Query("SELECT * FROM shops WHERE remoteId = :remoteId LIMIT 1")
     suspend fun findByRemoteId(remoteId: String): Shop?
 
+    @Query("SELECT * FROM shops WHERE ownerUid = :ownerUid LIMIT 1")
+    suspend fun getShopForOwnerUid(ownerUid: String): Shop?
+
+    @Query("SELECT * FROM shops WHERE ownerUid = :ownerUid")
+    suspend fun getAllForOwnerUid(ownerUid: String): List<Shop>
+
     @Query("SELECT * FROM shops")
     suspend fun getAll(): List<Shop>
 

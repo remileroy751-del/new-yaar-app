@@ -29,6 +29,15 @@ data class Product(
     val country: Country,
     val city: String,
     /**
+     * Villes dans lesquelles le produit est visible. La ville principale [city] est
+     * toujours incluse automatiquement. Le vendeur peut ajouter jusqu'à 5 villes.
+     */
+    val availableCities: List<String> = emptyList(),
+    /** UID Firebase du propriétaire, stable entre téléphones. */
+    val ownerUid: String? = null,
+    /** Identifiant Firestore de la boutique à laquelle le produit appartient. */
+    val shopRemoteId: String? = null,
+    /**
      * true = produit visible par les acheteurs dans "Acheter".
      * false = désactivé (automatiquement après 14 jours, ou manuellement par le vendeur).
      * Un produit désactivé n'est jamais supprimé automatiquement : il reste visible

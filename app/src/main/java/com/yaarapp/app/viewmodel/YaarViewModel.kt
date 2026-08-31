@@ -41,10 +41,20 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
+    /** Les anciens comptes de la version précédente doivent définir un mot de passe une seule fois. */
+    val needsAccountUpgrade: StateFlow<Boolean> = _currentUser
+        .map { it != null && it.firebaseUid == null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         viewModelScope.launch {
             currentUserId.collect { id ->
-                _currentUser.value = if (id != null) repository.getUser(id) else null
+                val local = if (id != null) repository.getUser(id) else null
+                _currentUser.value = local
+                if (local?.firebaseUid != null) {
+                    runCatching { repository.restoreAccount(local) }
+                        .onSuccess { restored -> _currentUser.value = restored }
+                }
             }
         }
         // Moteur d'exposition des campagnes publicitaires : une "exposition" par ouverture d'app.
@@ -78,10 +88,11 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError
 
-    /** @param localWhatsappNumber numéro tel que tapé par l'utilisateur, sans l'indicatif pays. */
+    /** Étapes 2 et 3 : identité WhatsApp puis mot de passe. */
     fun signUp(
         firstName: String,
         localWhatsappNumber: String,
+        password: String,
         onDone: () -> Unit
     ) {
         val country = _onboardingCountry.value
@@ -94,9 +105,13 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
             _authError.value = "Le numéro WhatsApp saisi semble incomplet."
             return
         }
+        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+            _authError.value = "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement."
+            return
+        }
         val whatsappNumber = PhoneFormat.formatWhatsapp(country, localWhatsappNumber)
         viewModelScope.launch {
-            when (val result = repository.signUp(firstName, country, city, whatsappNumber)) {
+            when (val result = repository.signUp(firstName, country, city, whatsappNumber, password)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user
@@ -107,10 +122,28 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
-    /** Connexion par numéro WhatsApp uniquement (déjà au format complet "00<indicatif><numéro>"). */
-    fun login(whatsappNumber: String, onDone: () -> Unit) {
+    fun secureLegacyAccount(password: String, onDone: () -> Unit) {
+        val user = _currentUser.value
+        if (user == null) {
+            _authError.value = "Aucun compte local à sécuriser."
+            return
+        }
         viewModelScope.launch {
-            when (val result = repository.login(whatsappNumber)) {
+            when (val result = repository.secureLegacyAccount(user, password)) {
+                is AuthResult.Success -> {
+                    _authError.value = null
+                    _currentUser.value = result.user
+                    onDone()
+                }
+                is AuthResult.Error -> _authError.value = result.message
+            }
+        }
+    }
+
+    /** Connexion par numéro WhatsApp + mot de passe Firebase. */
+    fun login(whatsappNumber: String, password: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            when (val result = repository.login(whatsappNumber, password)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user
@@ -158,8 +191,16 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     val selectedCategory: StateFlow<String?> = _selectedCategory
 
     val filteredProducts: StateFlow<List<Product>> =
-        combine(allProducts, _selectedCategory) { products, category ->
-            if (category == null) products else products.filter { it.category == category }
+        combine(allProducts, _selectedCategory, currentUser) { products, category, user ->
+            val scoped = if (user == null) products else products.filter {
+                it.country == user.country && user.city in (it.availableCities.ifEmpty { listOf(it.city) })
+            }
+            val categorized = if (category == null) scoped else scoped.filter { it.category == category }
+            if (user == null) categorized else categorized.sortedWith(
+                compareByDescending<Product> { it.isPromoted }
+                    .thenByDescending { user.city in (it.availableCities.ifEmpty { listOf(it.city) }) }
+                    .thenByDescending { it.createdAt }
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun selectCategory(category: String?) {
@@ -191,38 +232,21 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     /** Résultats de la même ville que l'acheteur — affichés en priorité. */
     val searchResultsSameCity: StateFlow<List<Product>> =
         combine(searchMatches, currentUser) { matches, user ->
-            if (user == null) matches else matches.filter { it.city == user.city }
+            if (user == null) matches else matches
+                .filter { it.country == user.country && user.city in (it.availableCities.ifEmpty { listOf(it.city) }) }
+                .sortedWith(compareByDescending<Product> { it.isPromoted }.thenByDescending { it.createdAt })
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Bouton "Afficher les produits disponibles dans d'autres villes". */
-    private val _showOtherCitiesPicker = MutableStateFlow(false)
-    val showOtherCitiesPicker: StateFlow<Boolean> = _showOtherCitiesPicker
-
-    fun toggleOtherCitiesPicker() {
-        _showOtherCitiesPicker.value = !_showOtherCitiesPicker.value
-    }
-
-    /** Villes (autres que la sienne) cochées par l'acheteur dans la liste. */
-    private val _selectedOtherCities = MutableStateFlow<Set<String>>(emptySet())
-    val selectedOtherCities: StateFlow<Set<String>> = _selectedOtherCities
-
-    fun toggleOtherCity(city: String) {
-        _selectedOtherCities.value = _selectedOtherCities.value.let {
-            if (city in it) it - city else it + city
-        }
-    }
-
-    /** Toutes les autres villes du pays de l'acheteur (liste complète, pas seulement celles avec résultats). */
-    val otherCitiesInCountry: StateFlow<List<String>> =
-        currentUser.map { user ->
-            if (user == null) emptyList()
-            else com.yaarapp.app.data.CityRepository.citiesFor(user.country).filter { it != user.city }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /** Résultats des villes cochées par l'acheteur dans "Afficher d'autres villes". */
+    /** Résultats du même pays, après ceux de la ville de l'acheteur. */
     val searchResultsOtherCities: StateFlow<List<Product>> =
-        combine(searchMatches, _selectedOtherCities) { matches, extraCities ->
-            if (extraCities.isEmpty()) emptyList() else matches.filter { it.city in extraCities }
+        combine(searchMatches, currentUser) { matches, user ->
+            if (user == null) emptyList() else matches
+                .filter { p ->
+                    p.country == user.country &&
+                        user.city !in (p.availableCities.ifEmpty { listOf(p.city) }) &&
+                        (p.availableCities.ifEmpty { listOf(p.city) }).isNotEmpty()
+                }
+                .sortedWith(compareByDescending<Product> { it.isPromoted }.thenByDescending { it.createdAt })
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ---------- Ma boutique ----------
@@ -300,11 +324,12 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         price: Double,
         imageUrl: String,
         category: String,
+        availableCities: List<String>,
         onSuccess: () -> Unit
     ) {
         val shop = myShop.value ?: return
         viewModelScope.launch {
-            when (val result = repository.addProduct(shop, name, description, price, imageUrl, category)) {
+            when (val result = repository.addProduct(shop, name, description, price, imageUrl, category, availableCities)) {
                 is AddProductResult.Success -> {
                     _addProductError.value = null
                     onSuccess()

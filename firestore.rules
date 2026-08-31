@@ -1,48 +1,41 @@
 rules_version = '2';
 
-// Règles de sécurité Firestore pour Yaar-App.
-// À déployer avec : firebase deploy --only firestore:rules
-// (voir BACKEND_FIREBASE.md pour l'installation de la Firebase CLI)
-//
-// MODÈLE DE CONFIANCE ACTUEL (V1) : l'app utilise l'authentification anonyme Firebase
-// (chaque installation obtient automatiquement un identifiant Firebase, sans écran de
-// connexion supplémentaire — voir FirebaseModule.kt). Cet identifiant est un uid Firebase
-// aléatoire qui NE CORRESPOND PAS à l'identifiant local (ownerId, buyerId, etc.), lequel
-// vient du système de compte local (WhatsApp + mot de passe géré uniquement dans Room).
-// En conséquence, ces règles vérifient seulement "l'appareil est authentifié auprès de
-// Firebase" (request.auth != null), pas "cette personne précise est bien la propriétaire
-// de cette boutique précise". C'est suffisant pour empêcher les robots/scripts anonymes
-// d'écrire n'importe quoi depuis l'extérieur de l'app, mais ça n'empêche pas un
-// utilisateur malveillant de modifier les données d'un autre à l'intérieur de l'app.
-//
-// AMÉLIORATION FUTURE RECOMMANDÉE : remplacer l'authentification anonyme par la connexion
-// Firebase par numéro de téléphone (Firebase Auth Phone), et faire correspondre le uid
-// Firebase obtenu à chaque compte local — ce qui permettra de restreindre les règles
-// ci-dessous à "seul le propriétaire peut modifier SA boutique" comme prévu initialement.
+// Yaar-App : identité Firebase stable + propriété des données.
+// Le mot de passe n'est jamais stocké dans Firestore : Firebase Authentication le gère.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
     }
 
     match /shops/{shopId} {
       allow read: if true;
-      allow create, update: if request.auth != null;
-      allow delete: if false; // pas de suppression de boutique dans l'app pour l'instant
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      // Autorise une fois la migration des anciennes boutiques sans ownerUid, puis
+      // verrouille les modifications sur le propriétaire Firebase réel.
+      allow update: if request.auth != null
+                    && (!('ownerUid' in resource.data) || resource.data.ownerUid == request.auth.uid)
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if false;
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+                    && (!('ownerUid' in resource.data) || resource.data.ownerUid == request.auth.uid)
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null
+                    && (!('ownerUid' in resource.data) || resource.data.ownerUid == request.auth.uid);
     }
 
     match /ad_campaigns/{campaignId} {
       allow read: if true;
       allow create: if request.auth != null;
-      // Les mises à jour (décrément des expositions) passent uniquement par la
-      // Cloud Function "recordAppOpenExposure" (SDK Admin, ignore ces règles) une fois
-      // celle-ci déployée — voir functions/index.js et BACKEND_FIREBASE.md.
       allow update, delete: if false;
     }
 

@@ -13,6 +13,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     suspend fun findById(id: Int): User?
 
+    @Query("SELECT * FROM users WHERE firebaseUid = :firebaseUid LIMIT 1")
+    suspend fun findByFirebaseUid(firebaseUid: String): User?
+
     @Insert
     suspend fun insert(user: User): Long
 

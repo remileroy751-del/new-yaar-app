@@ -1,3 +1,14 @@
+# ⚠️ Yaar-App 1.1.0 — changement important
+
+**Cette version remplace le modèle « compte local + authentification anonyme » par un compte permanent Firebase Authentication avec connexion numéro WhatsApp + mot de passe.**
+
+- Activez **Email/Password** dans Firebase Authentication.
+- Gardez **Anonymous** activé temporairement pour permettre la migration des anciens comptes.
+- Le mot de passe n'est jamais enregistré dans Firestore.
+- Les anciens comptes doivent terminer l'écran **Sécurisez votre compte** sur leur ancien appareil avant de changer de téléphone.
+- Après cette étape, l'UID Firebase devient l'identité stable du compte et les boutiques/produits sont rattachés à cet UID.
+- Pour le déploiement des nouvelles règles : `firebase deploy --only firestore:rules`.
+
 # Base de données en ligne gratuite — Firebase, et son état d'avancement
 
 ## 🟢 État actuel : synchronisation active

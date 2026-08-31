@@ -63,3 +63,43 @@ installation, vérifiez dans Firebase Console que :
 - les règles de `firestore.rules` sont déployées ;
 - **Storage** est créé ;
 - les règles de `storage.rules` sont déployées.
+
+## Mise à jour comptes utilisateurs — version 2
+
+Cette version utilise Firebase Authentication Email/Password pour les comptes Yaar-App.
+Le mot de passe n'est jamais enregistré dans Firestore ni dans Room. Firebase conserve le
+mot de passe de manière sécurisée. Yaar-App utilise une adresse technique dérivée du numéro
+WhatsApp afin de permettre une connexion avec « numéro WhatsApp + mot de passe » sans demander
+une adresse e-mail à l'utilisateur.
+
+### Firebase Console
+
+Dans **Authentication → Sign-in method**, activez **Email/Password**.
+L'authentification **Anonymous** doit rester activée pendant la période de migration des
+anciens comptes.
+
+### Migration des anciens comptes
+
+Les comptes créés avec l'ancienne version sont conservés dans Room grâce à une migration
+Room 6 → 7. Lors de la première ouverture après la mise à jour, un ancien compte est invité
+à définir son mot de passe. Le compte anonyme Firebase existant est alors lié au nouveau
+compte permanent sans changer son UID, puis la boutique et les produits existants sont
+rattachés à cet UID.
+
+**Important :** un ancien utilisateur doit effectuer cette sécurisation sur son ancien
+Téléphone avant de désinstaller l'ancienne application ou de perdre les données locales.
+Une fois le mot de passe défini et la migration terminée, il peut installer Yaar-App sur
+un autre téléphone et se connecter avec son numéro WhatsApp et son mot de passe.
+
+### Structure Firestore ajoutée
+
+- `users/{firebaseUid}` : profil utilisateur (jamais le mot de passe)
+- `shops/{shopId}` : `ownerUid` identifie le propriétaire Firebase
+- `products/{productId}` : `ownerUid`, `shopRemoteId`, `availableCities`
+- `availableCities` contient automatiquement la ville principale + au maximum 5 villes supplémentaires.
+
+Les règles `firestore.rules` ont été renforcées pour que les modifications de boutiques et
+produits soient liées au `request.auth.uid` du propriétaire.
+
+Après modification des règles, déployer :
+`firebase deploy --only firestore:rules`

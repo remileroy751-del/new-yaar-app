@@ -12,12 +12,10 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,9 +45,6 @@ fun SearchScreen(
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
     val sameCity by viewModel.searchResultsSameCity.collectAsStateWithLifecycle()
     val otherCitiesResults by viewModel.searchResultsOtherCities.collectAsStateWithLifecycle()
-    val otherCitiesList by viewModel.otherCitiesInCountry.collectAsStateWithLifecycle()
-    val selectedOtherCities by viewModel.selectedOtherCities.collectAsStateWithLifecycle()
-    val showOtherCitiesPicker by viewModel.showOtherCitiesPicker.collectAsStateWithLifecycle()
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -121,51 +116,20 @@ fun SearchScreen(
             }
 
             item(span = { GridItemSpan(2) }) {
-                TextButton(onClick = { viewModel.toggleOtherCitiesPicker() }, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        if (showOtherCitiesPicker) "Masquer les autres villes"
-                        else "Afficher les produits disponibles dans d'autres villes"
-                    )
-                }
+                Text(
+                    "Résultats dans les autres villes de ${user?.country?.displayName ?: "votre pays"}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
             }
-
-            if (showOtherCitiesPicker) {
+            if (otherCitiesResults.isEmpty()) {
                 item(span = { GridItemSpan(2) }) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        otherCitiesList.forEach { city ->
-                            FilterChip(
-                                selected = city in selectedOtherCities,
-                                onClick = { viewModel.toggleOtherCity(city) },
-                                label = { Text(city) }
-                            )
-                        }
-                    }
+                    Text("Aucun autre résultat dans votre pays.", style = MaterialTheme.typography.bodyMedium)
                 }
-
-                if (selectedOtherCities.isNotEmpty()) {
-                    item(span = { GridItemSpan(2) }) {
-                        Text(
-                            "Résultats dans les autres villes sélectionnées",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-                    }
-                    if (otherCitiesResults.isEmpty()) {
-                        item(span = { GridItemSpan(2) }) {
-                            Text(
-                                "Aucun résultat dans ces villes.",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    } else {
-                        items(otherCitiesResults, key = { it.id }) { product ->
-                            ProductCard(product = product, onClick = { onProductClick(product) })
-                        }
-                    }
+            } else {
+                items(otherCitiesResults, key = { it.id }) { product ->
+                    ProductCard(product = product, onClick = { onProductClick(product) })
                 }
             }
         }

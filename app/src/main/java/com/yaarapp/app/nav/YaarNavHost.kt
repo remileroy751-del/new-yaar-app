@@ -30,6 +30,7 @@ import com.yaarapp.app.ui.screens.PlansScreen
 import com.yaarapp.app.ui.screens.ProductDetailScreen
 import com.yaarapp.app.ui.screens.ProfileScreen
 import com.yaarapp.app.ui.screens.SearchScreen
+import com.yaarapp.app.ui.screens.SecureAccountScreen
 import com.yaarapp.app.ui.screens.SelectProductToPromoteScreen
 import com.yaarapp.app.ui.screens.ShopPublicScreen
 import com.yaarapp.app.ui.screens.SignUpScreen
@@ -59,10 +60,10 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
             NavHost(navController = navController, startDestination = Routes.SPLASH) {
                 composable(Routes.SPLASH) {
                     SplashScreen(onFinished = {
-                        val destination = if (viewModel.currentUserId.value != null) {
-                            Routes.MARKETPLACE
-                        } else {
-                            Routes.LOGIN
+                        val destination = when {
+                            viewModel.currentUser.value?.firebaseUid == null && viewModel.currentUser.value != null -> Routes.SECURE_ACCOUNT
+                            viewModel.currentUserId.value != null -> Routes.MARKETPLACE
+                            else -> Routes.LOGIN
                         }
                         navController.navigate(destination) {
                             popUpTo(Routes.SPLASH) { inclusive = true }
@@ -88,6 +89,17 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         onContinue = { navController.navigate(Routes.SIGNUP) }
                     )
                 }
+                composable(Routes.SECURE_ACCOUNT) {
+                    SecureAccountScreen(
+                        viewModel = viewModel,
+                        onDone = {
+                            navController.navigate(Routes.MARKETPLACE) {
+                                popUpTo(Routes.SECURE_ACCOUNT) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+
                 composable(Routes.SIGNUP) {
                     SignUpScreen(
                         viewModel = viewModel,

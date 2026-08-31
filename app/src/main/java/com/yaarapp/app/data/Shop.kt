@@ -8,6 +8,8 @@ data class Shop(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val ownerId: Int,
+    /** UID Firebase du propriétaire, stable entre téléphones. */
+    val ownerUid: String? = null,
     val name: String,
     val whatsappNumber: String,
     /** Pays et ville de la boutique — repris automatiquement du profil du vendeur à la création. */

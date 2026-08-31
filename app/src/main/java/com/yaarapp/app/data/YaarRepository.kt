@@ -38,57 +38,102 @@ class YaarRepository(context: Context) {
 
     fun clearLastSyncEvent() = firestoreSync.clearLastSyncEvent()
 
-    // ---------- Authentification (locale, voir data/User.kt) ----------
+    // ---------- Authentification Firebase ----------
 
-    /**
-     * Inscription minimale : pays, ville, prénom et numéro WhatsApp — pas de mot de
-     * passe (voir la note de sécurité dans data/User.kt).
-     * @param whatsappNumber déjà normalisé au format "00" + indicatif + numéro local
-     * (voir [com.yaarapp.app.util.PhoneFormat]).
-     */
     suspend fun signUp(
         firstName: String,
         country: Country,
         city: String,
-        whatsappNumber: String
+        whatsappNumber: String,
+        password: String
     ): AuthResult {
-        if (firstName.isBlank() || city.isBlank()) {
-            return AuthResult.Error("Merci de renseigner votre prénom.")
-        }
-        if (whatsappNumber.length < 10) {
-            return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
+        if (firstName.isBlank() || city.isBlank()) return AuthResult.Error("Merci de renseigner votre nom complet.")
+        if (whatsappNumber.length < 10) return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
+        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         }
         if (userDao.findByWhatsapp(whatsappNumber) != null) {
-            return AuthResult.Error("Un compte existe déjà avec ce numéro WhatsApp.")
+            return AuthResult.Error("Un compte existe déjà avec ce numéro WhatsApp. Connectez-vous avec votre mot de passe.")
         }
-        val user = User(
-            firstName = firstName,
-            country = country,
-            city = city,
-            whatsappNumber = whatsappNumber
-        )
-        val id = userDao.insert(user)
-        session.setCurrentUser(id.toInt())
-        return AuthResult.Success(user.copy(id = id.toInt()))
+
+        return try {
+            val uid = com.yaarapp.app.firebase.FirebaseModule.createEmailPasswordAccount(whatsappNumber, password)
+            val user = User(
+                firstName = firstName, country = country, city = city,
+                whatsappNumber = whatsappNumber, firebaseUid = uid
+            )
+            val id = userDao.insert(user).toInt()
+            val created = user.copy(id = id)
+            session.setCurrentUser(id)
+            firestoreSync.syncUser(created)
+            AuthResult.Success(created)
+        } catch (e: Exception) {
+            AuthResult.Error(authErrorMessage(e))
+        }
     }
 
-    /** Connexion par numéro WhatsApp uniquement — pas de mot de passe (voir data/User.kt). */
-    suspend fun login(whatsappNumber: String): AuthResult {
-        val user = userDao.findByWhatsapp(whatsappNumber)
-            ?: return AuthResult.Error("Aucun compte trouvé avec ce numéro WhatsApp.")
-        session.setCurrentUser(user.id)
-        return AuthResult.Success(user)
+    suspend fun secureLegacyAccount(user: User, password: String): AuthResult {
+        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
+        }
+        return try {
+            val uid = com.yaarapp.app.firebase.FirebaseModule.linkAnonymousAccount(user.whatsappNumber, password)
+            val upgraded = user.copy(firebaseUid = uid)
+            userDao.update(upgraded)
+            firestoreSync.migrateLegacyAccount(upgraded)
+            AuthResult.Success(upgraded)
+        } catch (e: Exception) {
+            AuthResult.Error(authErrorMessage(e))
+        }
+    }
+
+    suspend fun login(whatsappNumber: String, password: String): AuthResult {
+        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
+        }
+        return try {
+            val uid = com.yaarapp.app.firebase.FirebaseModule.signInWithWhatsappPassword(whatsappNumber, password)
+            var user = userDao.findByWhatsapp(whatsappNumber)
+            if (user == null) {
+                user = firestoreSync.createLocalUserFromCloud(uid, whatsappNumber)
+            } else if (user.firebaseUid != uid) {
+                user = user.copy(firebaseUid = uid).also { userDao.update(it) }
+            }
+            if (user == null) return AuthResult.Error("Compte introuvable dans les données Yaar-App.")
+
+            user = firestoreSync.restoreAccount(user)
+            session.setCurrentUser(user.id)
+            AuthResult.Success(user)
+        } catch (e: Exception) {
+            AuthResult.Error(authErrorMessage(e))
+        }
+    }
+
+    private fun authErrorMessage(e: Exception): String {
+        val authCode = (e as? com.google.firebase.auth.FirebaseAuthException)?.errorCode.orEmpty().lowercase()
+        val message = e.message.orEmpty().lowercase()
+        return when {
+            authCode.contains("invalid-credential") || authCode.contains("wrong-password") || authCode.contains("invalid-login-credentials") -> "Numéro WhatsApp ou mot de passe incorrect."
+            authCode.contains("user-not-found") -> "Aucun compte trouvé avec ce numéro WhatsApp."
+            authCode.contains("email-already-in-use") || message.contains("credential is already associated") -> "Ce numéro WhatsApp est déjà associé à un autre compte Firebase."
+            authCode.contains("requires-recent-login") -> "Reconnectez-vous puis réessayez."
+            else -> e.message ?: "Une erreur Firebase est survenue. Vérifiez votre connexion Internet."
+        }
     }
 
     suspend fun logout() {
         session.clearSession()
+        runCatching { com.yaarapp.app.firebase.FirebaseModule.signOut() }
     }
 
     suspend fun getUser(id: Int): User? = userDao.findById(id)
 
+    suspend fun restoreAccount(user: User): User = firestoreSync.restoreAccount(user)
+
     suspend fun setNotificationsEnabled(user: User, enabled: Boolean): User {
         val updated = user.copy(notificationsEnabled = enabled)
         userDao.update(updated)
+        firestoreSync.syncUser(updated)
         return updated
     }
 
@@ -107,6 +152,7 @@ class YaarRepository(context: Context) {
     ): Shop {
         val shop = Shop(
             ownerId = owner.id,
+            ownerUid = owner.firebaseUid,
             name = name,
             whatsappNumber = whatsappNumber,
             country = owner.country,
@@ -117,8 +163,12 @@ class YaarRepository(context: Context) {
         )
         val id = shopDao.insert(shop)
         val created = shop.copy(id = id.toInt())
-        firestoreSync.syncShop(created)
-        return created
+        return try {
+            firestoreSync.syncShopNow(created)
+        } catch (_: Exception) {
+            // La boutique reste disponible localement si le réseau est indisponible.
+            created
+        }
     }
 
     /**
@@ -140,7 +190,8 @@ class YaarRepository(context: Context) {
         description: String,
         price: Double,
         imageUrl: String,
-        category: String
+        category: String,
+        availableCities: List<String>
     ): AddProductResult {
         if (name.isBlank() || description.isBlank() || imageUrl.isBlank() || price <= 0) {
             return AddProductResult.Error("Merci de remplir tous les champs (photo, nom, description, prix).")
@@ -159,7 +210,10 @@ class YaarRepository(context: Context) {
                 imageUrl = imageUrl,
                 category = category.ifBlank { "Divers" },
                 country = shop.country,
-                city = shop.city
+                city = shop.city,
+                availableCities = (listOf(shop.city) + availableCities).distinct().take(6),
+                ownerUid = shop.ownerUid,
+                shopRemoteId = shop.remoteId
             )
         )
         productDao.getById(id.toInt())?.let { firestoreSync.syncProduct(it) }

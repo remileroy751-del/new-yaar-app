@@ -5,6 +5,7 @@ object Routes {
     const val ONBOARDING_LOCATION = "onboarding_location" // choix pays + ville, avant inscription
     const val LOGIN = "login"
     const val SIGNUP = "signup"
+    const val SECURE_ACCOUNT = "secure_account"
 
     const val MARKETPLACE = "marketplace"          // "Acheter"
     const val SEARCH = "search"                     // recherche par mot-clé + ville

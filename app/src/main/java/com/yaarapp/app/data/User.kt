@@ -4,19 +4,11 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Compte utilisateur.
+ * Profil local d'un compte Yaar-App.
  *
- * NOTE IMPORTANTE : pour cette version, l'inscription est volontairement minimale —
- * pays, ville, prénom et numéro WhatsApp, sans mot de passe. L'identifiant de connexion
- * est le numéro WhatsApp lui-même : quiconque saisit un numéro déjà enregistré est
- * connecté à ce compte, sans vérification supplémentaire. C'est un choix assumé pour
- * réduire la friction à l'inscription, mais ce n'est PAS un mécanisme de sécurité — à
- * remplacer par une vraie vérification (ex. code OTP envoyé par SMS/WhatsApp, ou
- * Firebase Auth par numéro de téléphone) avant toute mise en production sérieuse.
- *
- * whatsappNumber est stocké au format "00" + indicatif pays + numéro local (ex :
- * "0022890000000" pour un numéro togolais), afin de faciliter l'envoi automatique de
- * messages vers ce numéro.
+ * Le mot de passe n'est JAMAIS stocké ici ni dans Firestore : il est géré
+ * par Firebase Authentication (Email/Password). L'adresse e-mail technique
+ * utilisée par Firebase est dérivée du numéro WhatsApp et n'est pas affichée.
  */
 @Entity(tableName = "users")
 data class User(
@@ -26,11 +18,8 @@ data class User(
     val country: Country,
     val city: String,
     val whatsappNumber: String,
-    /**
-     * Reçoit ou non les notifications de l'application (ex : "je suis intéressé" sur un
-     * produit de sa boutique). Réglable dans "Mon profil". Servira à filtrer l'envoi des
-     * notifications push une fois le backend Firebase branché (Firebase Cloud Messaging).
-     */
     val notificationsEnabled: Boolean = true,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    /** UID Firebase Authentication. Null uniquement pour les anciens comptes avant sécurisation. */
+    val firebaseUid: String? = null
 )

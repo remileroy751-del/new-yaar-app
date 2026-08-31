@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [User::class, Shop::class, Product::class, CartItem::class, Interest::class, AdCampaign::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -21,6 +21,16 @@ abstract class YaarDatabase : RoomDatabase() {
     abstract fun adCampaignDao(): AdCampaignDao
 
     companion object {
+        private val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE users ADD COLUMN firebaseUid TEXT")
+                db.execSQL("ALTER TABLE shops ADD COLUMN ownerUid TEXT")
+                db.execSQL("ALTER TABLE products ADD COLUMN availableCities TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE products ADD COLUMN ownerUid TEXT")
+                db.execSQL("ALTER TABLE products ADD COLUMN shopRemoteId TEXT")
+            }
+        }
+
         @Volatile
         private var INSTANCE: YaarDatabase? = null
 
@@ -31,20 +41,9 @@ abstract class YaarDatabase : RoomDatabase() {
                     YaarDatabase::class.java,
                     "yaar_app.db"
                 )
-                    // Version 2 a introduit pays/ville/sexe et l'expiration des produits ;
-                    // version 3 a ajouté logo/description/catégories de boutique, la
-                    // promotion et les notifications "intéressé" ; version 4 a remplacé
-                    // le système de forfaits par la capacité de produits payante (5→20)
-                    // et les campagnes publicitaires calculées, plus la certification de
-                    // boutique ; version 5 ajoute remoteId (synchronisation Firestore) ;
-                    // version 6 simplifie l'inscription (suppression du sexe et du mot de
-                    // passe — identification par numéro WhatsApp uniquement) et retire les
-                    // données de démonstration (SeedData supprimé).
-                    // Comme il s'agit d'une base locale de démonstration (pas de
-                    // données critiques côté serveur), on repart d'une base propre au lieu
-                    // d'écrire une migration détaillée. À remplacer par une vraie migration
-                    // Room (ou par la bascule vers Firestore, voir /BACKEND_FIREBASE.md)
-                    // avant toute mise en production avec de vraies données utilisateurs.
+                    // Version 7 ajoute l'identité Firebase stable du compte, le ciblage
+                    // multi-villes des produits et les identifiants Firebase des boutiques.
+                    .addMigrations(MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }

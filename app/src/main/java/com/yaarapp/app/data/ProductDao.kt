@@ -24,11 +24,20 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE shopId = :shopId ORDER BY isActive DESC, createdAt DESC")
     fun observeByShop(shopId: Int): Flow<List<Product>>
 
+    @Query("SELECT * FROM products WHERE shopId = :shopId")
+    suspend fun getAllForShop(shopId: Int): List<Product>
+
     @Query("SELECT * FROM products WHERE id = :id")
     suspend fun getById(id: Int): Product?
 
     @Query("SELECT * FROM products WHERE remoteId = :remoteId LIMIT 1")
     suspend fun findByRemoteId(remoteId: String): Product?
+
+    @Query("UPDATE products SET shopId = :shopId WHERE shopRemoteId = :shopRemoteId")
+    suspend fun rebindProductsToLocalShop(shopRemoteId: String, shopId: Int)
+
+    @Query("SELECT * FROM products WHERE ownerUid = :ownerUid")
+    suspend fun getAllForOwnerUid(ownerUid: String): List<Product>
 
     /** Nombre de produits actuellement EXPOSÉS (actifs) — c'est ce qui compte pour la limite du forfait. */
     @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1")
