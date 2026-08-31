@@ -54,7 +54,10 @@ object FirebaseModule {
     /** Transforme l'ancien compte anonyme de l'appareil en compte permanent sans changer son UID. */
     suspend fun linkAnonymousAccount(whatsappNumber: String, password: String): String {
         require(isValidPassword(password)) { "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement." }
-        val current = auth.currentUser ?: signInAnonymouslyUser()
+        // Ne jamais mélanger FirebaseUser et String ici : signInAnonymouslyUser()
+        // retourne l'UID, alors que linkWithCredential() appartient à FirebaseUser.
+        val current = auth.currentUser ?: auth.signInAnonymously().await().user
+            ?: error("Impossible d'obtenir l'utilisateur Firebase anonyme.")
         val credential = EmailAuthProvider.getCredential(authEmailForWhatsapp(whatsappNumber), password)
         val result = current.linkWithCredential(credential).await()
         return result.user?.uid ?: error("Impossible de sécuriser le compte Firebase.")
