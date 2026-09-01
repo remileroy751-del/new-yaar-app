@@ -67,7 +67,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         for (change in changes) {
             if (change.type == DocumentChange.Type.REMOVED) continue
             try {
-                val remote = change.document.toObject(Shop::class.java).copy(remoteId = change.document.id)
+                val remote = shopFromDocument(change.document.id, change.document.data) ?: continue
                 val existing = shopDao.findByRemoteId(change.document.id)
                 val localOwnerId = remote.ownerUid?.let { userDao.findByFirebaseUid(it)?.id } ?: existing?.ownerId ?: 0
                 val local = remote.copy(id = existing?.id ?: 0, ownerId = localOwnerId)
@@ -90,7 +90,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                     existing?.let { productDao.delete(it) }
                     continue
                 }
-                val raw = change.document.toObject(Product::class.java)
+                val raw = productFromDocument(change.document.id, change.document.data) ?: continue
                 val remoteShopId = raw.shopRemoteId
                 val localShopId = remoteShopId?.let { shopDao.findByRemoteId(it)?.id }
                     ?: existing?.shopId ?: 0
@@ -174,7 +174,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
 
         val remoteShops = shopsCollection.whereEqualTo("ownerUid", uid).get().await().documents
         for (doc in remoteShops) {
-            val remote = doc.toObject(Shop::class.java)?.copy(remoteId = doc.id) ?: continue
+            val remote = shopFromDocument(doc.id, doc.data) ?: continue
             val existing = shopDao.findByRemoteId(doc.id)
             val localShop = remote.copy(id = existing?.id ?: 0, ownerId = restoredUser.id, ownerUid = uid)
             val localId = if (existing == null) shopDao.insert(localShop).toInt() else { shopDao.update(localShop); existing.id }
@@ -183,7 +183,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
 
         val remoteProducts = productsCollection.whereEqualTo("ownerUid", uid).get().await().documents
         for (doc in remoteProducts) {
-            val remote = doc.toObject(Product::class.java)?.copy(remoteId = doc.id) ?: continue
+            val remote = productFromDocument(doc.id, doc.data) ?: continue
             val existing = productDao.findByRemoteId(doc.id)
             val localShopId = remote.shopRemoteId?.let { shopDao.findByRemoteId(it)?.id } ?: 0
             val localProduct = remote.copy(
@@ -233,7 +233,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         val logoUrl = shop.logoUrl?.let { uploadImageIfLocal("shops", it) }
         val docRef = shop.remoteId?.let { shopsCollection.document(it) } ?: shopsCollection.document()
         val toSync = shop.copy(ownerUid = uid, logoUrl = logoUrl ?: shop.logoUrl, remoteId = docRef.id)
-        docRef.set(toSync).await()
+        docRef.set(shopToMap(toSync)).await()
         shopDao.update(toSync)
         return toSync
     }
@@ -263,7 +263,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
             imageUrl = imageUrl,
             remoteId = docRef.id
         )
-        docRef.set(toSync).await()
+        docRef.set(productToMap(toSync)).await()
         productDao.update(toSync)
         return toSync
     }
@@ -283,6 +283,142 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
             try { productsCollection.document(remoteId).delete().await() } catch (_: Exception) { }
         }
     }
+
+    /**
+     * Firestore ne doit pas désérialiser directement les entités Room : leurs classes
+     * ont des constructeurs Kotlin/Room et des propriétés de type enum/list qui ne sont
+     * pas toujours compatibles avec le mapper Java de Firestore. On utilise donc un
+     * schéma Firestore explicite et on reconstruit les objets Room manuellement.
+     * Cela corrige notamment "Class Shop does not define a no-argument constructor".
+     */
+    private fun shopFromDocument(remoteId: String, data: Map<String, Any?>): Shop? {
+        return try {
+            val countryName = data["country"]?.toString() ?: return null
+            val country = runCatching { Country.valueOf(countryName) }.getOrNull() ?: return null
+            Shop(
+                id = 0,
+                ownerId = 0,
+                ownerUid = data["ownerUid"]?.toString(),
+                name = data["name"]?.toString().orEmpty(),
+                whatsappNumber = data["whatsappNumber"]?.toString().orEmpty(),
+                country = country,
+                city = data["city"]?.toString().orEmpty(),
+                logoUrl = data["logoUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
+                activityDescription = data["activityDescription"]?.toString().orEmpty(),
+                categories = stringList(data["categories"]),
+                extraProductSlots = numberInt(data["extraProductSlots"]),
+                certificationStatus = enumValue<CertificationStatus>(data["certificationStatus"], CertificationStatus.NONE),
+                idCardFrontUrl = data["idCardFrontUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
+                idCardBackUrl = data["idCardBackUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
+                certificationRequestedAt = numberLongOrNull(data["certificationRequestedAt"]),
+                createdAt = numberLong(data["createdAt"], System.currentTimeMillis()),
+                remoteId = remoteId
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Boutique Firestore ignorée ($remoteId): ${e.message}")
+            null
+        }
+    }
+
+    private fun productFromDocument(remoteId: String, data: Map<String, Any?>): Product? {
+        return try {
+            val countryName = data["country"]?.toString() ?: return null
+            val country = runCatching { Country.valueOf(countryName) }.getOrNull() ?: return null
+            val city = data["city"]?.toString().orEmpty()
+            Product(
+                id = 0,
+                shopId = 0,
+                shopName = data["shopName"]?.toString().orEmpty(),
+                name = data["name"]?.toString().orEmpty(),
+                description = data["description"]?.toString().orEmpty(),
+                price = numberDouble(data["price"]),
+                imageUrl = data["imageUrl"]?.toString().orEmpty(),
+                category = data["category"]?.toString().orEmpty().ifBlank { "Divers" },
+                country = country,
+                city = city,
+                availableCities = stringList(data["availableCities"]).ifEmpty { listOf(city) },
+                ownerUid = data["ownerUid"]?.toString(),
+                shopRemoteId = data["shopRemoteId"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
+                isActive = data["isActive"] as? Boolean ?: true,
+                createdAt = numberLong(data["createdAt"], System.currentTimeMillis()),
+                activatedAt = numberLong(data["activatedAt"], numberLong(data["createdAt"], System.currentTimeMillis())),
+                isPromoted = data["isPromoted"] as? Boolean ?: false,
+                remoteId = remoteId
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Produit Firestore ignoré ($remoteId): ${e.message}")
+            null
+        }
+    }
+
+    private fun shopToMap(shop: Shop): Map<String, Any?> = mapOf(
+        "ownerUid" to shop.ownerUid,
+        "name" to shop.name,
+        "whatsappNumber" to shop.whatsappNumber,
+        "country" to shop.country.name,
+        "city" to shop.city,
+        "logoUrl" to shop.logoUrl,
+        "activityDescription" to shop.activityDescription,
+        "categories" to shop.categories,
+        "extraProductSlots" to shop.extraProductSlots,
+        "certificationStatus" to shop.certificationStatus.name,
+        "idCardFrontUrl" to shop.idCardFrontUrl,
+        "idCardBackUrl" to shop.idCardBackUrl,
+        "certificationRequestedAt" to shop.certificationRequestedAt,
+        "createdAt" to shop.createdAt
+    )
+
+    private fun productToMap(product: Product): Map<String, Any?> = mapOf(
+        "ownerUid" to product.ownerUid,
+        "shopRemoteId" to product.shopRemoteId,
+        "shopName" to product.shopName,
+        "name" to product.name,
+        "description" to product.description,
+        "price" to product.price,
+        "imageUrl" to product.imageUrl,
+        "category" to product.category,
+        "country" to product.country.name,
+        "city" to product.city,
+        "availableCities" to product.availableCities.ifEmpty { listOf(product.city) },
+        "isActive" to product.isActive,
+        "createdAt" to product.createdAt,
+        "activatedAt" to product.activatedAt,
+        "isPromoted" to product.isPromoted
+    )
+
+    private fun stringList(value: Any?): List<String> = when (value) {
+        is List<*> -> value.mapNotNull { it?.toString() }.filter { it.isNotBlank() }
+        is Array<*> -> value.mapNotNull { it?.toString() }.filter { it.isNotBlank() }
+        is String -> if (value.isBlank()) emptyList() else value.split("‖", ",").map { it.trim() }.filter { it.isNotBlank() }
+        else -> emptyList()
+    }
+
+    private fun numberInt(value: Any?): Int = when (value) {
+        is Number -> value.toInt()
+        is String -> value.toIntOrNull() ?: 0
+        else -> 0
+    }
+
+    private fun numberLong(value: Any?, fallback: Long): Long = when (value) {
+        is Number -> value.toLong()
+        is String -> value.toLongOrNull() ?: fallback
+        else -> fallback
+    }
+
+    private fun numberLongOrNull(value: Any?): Long? = when (value) {
+        is Number -> value.toLong()
+        is String -> value.toLongOrNull()
+        else -> null
+    }
+
+    private fun numberDouble(value: Any?): Double = when (value) {
+        is Number -> value.toDouble()
+        is String -> value.toDoubleOrNull() ?: 0.0
+        else -> 0.0
+    }
+
+    private inline fun <reified T : Enum<T>> enumValue(value: Any?, fallback: T): T =
+        value?.toString()?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: fallback
 
     private suspend fun uploadImageIfLocal(folder: String, imageUrl: String): String {
         if (imageUrl.startsWith("res:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl

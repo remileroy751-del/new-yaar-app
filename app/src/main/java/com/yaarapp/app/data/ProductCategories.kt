@@ -19,6 +19,8 @@ object ProductCategories {
         "Cosmétiques & Beauté",
         "Électroménager",
         "Électronique",
+        "Informatique",
+        "Matériels de bureau",
         "Meubles & Déco",
         "Jouets & Jeux",
         "Alimentation & Boissons",
