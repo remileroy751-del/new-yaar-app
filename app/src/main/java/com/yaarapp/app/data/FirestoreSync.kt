@@ -44,7 +44,11 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         listenersStarted = true
         syncScope.launch {
             try {
-                FirebaseModule.ensureSignedIn()
+                val uid = FirebaseModule.ensureSignedIn()
+                // Répare les anciens produits dont Firestore contient encore un chemin
+                // local (inutilisable sur les autres téléphones) en réimportant la photo
+                // depuis le téléphone du propriétaire lorsqu'elle existe encore.
+                repairOwnedProductImages(uid)
                 reportSuccess("Connexion Firebase OK — synchronisation temps réel démarrée.")
             } catch (e: Exception) {
                 reportFailure("Connexion Firebase impossible au démarrage : ${e.message}")
@@ -420,14 +424,53 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     private inline fun <reified T : Enum<T>> enumValue(value: Any?, fallback: T): T =
         value?.toString()?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: fallback
 
+    /**
+     * Réimporte les photos des produits créés par les anciennes versions de l'app
+     * lorsque Firestore avait enregistré un chemin local du type /data/... au lieu
+     * d'une URL Firebase Storage. Cela permet de réparer les anciens produits sans
+     * supprimer les documents Firestore.
+     */
+    private suspend fun repairOwnedProductImages(uid: String) {
+        val localProducts = productDao.getAllForOwnerUid(uid)
+        var repaired = 0
+        for (product in localProducts) {
+            val remoteId = product.remoteId ?: continue
+            if (!isLocalImageReference(product.imageUrl)) continue
+            val file = File(normalizeLocalImagePath(product.imageUrl))
+            if (!file.exists() || !file.isFile || file.length() == 0L) continue
+            try {
+                val repairedProduct = syncProductNow(product)
+                if (repairedProduct.imageUrl.startsWith("https://")) repaired++
+            } catch (e: Exception) {
+                Log.w(TAG, "Réparation photo impossible pour $remoteId: ${e.message}")
+            }
+        }
+        if (repaired > 0) reportSuccess("$repaired photo(s) produit(s) réparée(s) dans Firebase Storage.")
+    }
+
+    private fun isLocalImageReference(value: String): Boolean =
+        value.startsWith("/") || value.startsWith("file://")
+
+    private fun normalizeLocalImagePath(value: String): String =
+        value.removePrefix("file://")
+
     private suspend fun uploadImageIfLocal(folder: String, imageUrl: String): String {
         if (imageUrl.startsWith("res:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl
         return try {
-            val file = File(imageUrl)
-            if (!file.exists()) return imageUrl
-            val ref = FirebaseModule.storage.reference.child("$folder/${UUID.randomUUID()}.jpg")
+            val path = normalizeLocalImagePath(imageUrl)
+            val file = File(path)
+            if (!file.exists() || !file.isFile || file.length() == 0L) return imageUrl
+            val extension = when (file.extension.lowercase()) {
+                "png" -> "png"
+                "webp" -> "webp"
+                else -> "jpg"
+            }
+            val ref = FirebaseModule.storage.reference.child("$folder/${UUID.randomUUID()}.$extension")
             ref.putFile(Uri.fromFile(file)).await()
             ref.downloadUrl.await().toString()
-        } catch (_: Exception) { imageUrl }
+        } catch (e: Exception) {
+            Log.w(TAG, "Upload image échoué pour $imageUrl: ${e.message}")
+            imageUrl
+        }
     }
 }

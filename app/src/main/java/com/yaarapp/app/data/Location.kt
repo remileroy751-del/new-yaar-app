@@ -1,14 +1,6 @@
 package com.yaarapp.app.data
 
-/**
- * Les 4 pays de lancement de Yaar-App, avec leur drapeau (emoji) et leur
- * indicatif téléphonique international (sans le "+").
- *
- * Pour ajouter un futur pays : ajouter une entrée ici + sa liste de villes
- * dans [CityRepository.citiesByCountry]. Rien d'autre à changer, tout le
- * reste de l'application (inscription, recherche, tri par ville) s'adapte
- * automatiquement.
- */
+/** Pays disponibles dans Yaar-App, avec drapeau et indicatif international. */
 enum class Country(
     val displayName: String,
     val flagEmoji: String,
@@ -17,24 +9,20 @@ enum class Country(
     BENIN("Bénin", "\uD83C\uDDE7\uD83C\uDDEF", "229"),
     BURKINA_FASO("Burkina Faso", "\uD83C\uDDE7\uD83C\uDDEB", "226"),
     COTE_DIVOIRE("Côte d'Ivoire", "\uD83C\uDDE8\uD83C\uDDEE", "225"),
-    TOGO("Togo", "\uD83C\uDDF9\uD83C\uDDEC", "228");
+    MALI("Mali", "\uD83C\uDDF2\uD83C\uDDED", "223"),
+    NIGER("Niger", "\uD83C\uDDF3\uD83C\uDDEA", "227"),
+    SENEGAL("Sénégal", "\uD83C\uDDF8\uD83C\uDDF3", "221"),
+    TOGO("Togo", "\uD83C\uDDF9\uDDEC", "228");
 
-    /** Ex : "🇹🇬 Togo" — à afficher dans les listes de sélection. */
     val labelWithFlag: String get() = "$flagEmoji $displayName"
 }
 
 /**
- * Répertoire des villes/régions disponibles par pays, trié par ordre
- * alphabétique. Cette liste couvre les principales villes, chefs-lieux de
- * région/province et communes de chaque pays — elle n'est pas exhaustive à
- * 100 % (un pays peut compter plusieurs centaines de localités), mais elle
- * est volontairement large pour couvrir l'immense majorité des utilisateurs
- * dès le lancement. Il suffit d'ajouter une ville à la liste correspondante
- * ci-dessous pour qu'elle apparaisse automatiquement dans l'app (inscription
- * et filtres de recherche).
+ * Villes disponibles par pays. L'application trie toujours ces listes par ordre
+ * alphabétique avant affichage. Les listes sont volontairement centrées sur les
+ * principales villes et communes urbaines utiles pour une marketplace.
  */
 object CityRepository {
-
     private val citiesByCountry: Map<Country, List<String>> = mapOf(
         Country.BENIN to listOf(
             "Abomey", "Abomey-Calavi", "Adjarra", "Adjohoun", "Aplahoué", "Athiémé",
@@ -61,8 +49,28 @@ object CityRepository {
             "Man", "Mankono", "Odienné", "Oumé", "San-Pédro", "Sassandra",
             "Séguéla", "Soubré", "Tabou", "Tiassalé", "Toumodi", "Yamoussoukro"
         ),
+        Country.MALI to listOf(
+            "Bamako", "Banamba", "Bandiagara", "Bla", "Bougouni", "Bourem", "Dioïla",
+            "Diré", "Djenné", "Douentza", "Gao", "Goundam", "Kadiolo", "Kangaba",
+            "Kati", "Kayes", "Kidal", "Kita", "Kolokani", "Koulikoro", "Koutiala",
+            "Markala", "Mopti", "Nioro du Sahel", "San", "Ségou", "Sikasso",
+            "Tenenkou", "Tombouctou", "Yanfolila", "Yorosso"
+        ),
+        Country.NIGER to listOf(
+            "Agadez", "Arlit", "Balleyara", "Birni N'Konni", "Diffa", "Dosso", "Filingué",
+            "Gaya", "Gouré", "Guidan Roumdji", "Illéla", "Keita", "Loga", "Magaria",
+            "Maradi", "Madaoua", "Mayahi", "Mirriah", "Niamey", "Ouallam", "Tahoua",
+            "Tchintabaraden", "Tessaoua", "Tillabéri", "Téra", "Torodi", "Zinder"
+        ),
+        Country.SENEGAL to listOf(
+            "Bargny", "Dakar", "Diourbel", "Fatick", "Guédiawaye", "Joal-Fadiouth",
+            "Kaffrine", "Kaolack", "Kédougou", "Kolda", "Louga", "Mbacké", "Matam",
+            "Mbour", "Nioro du Rip", "Pikine", "Podor", "Richard-Toll", "Rufisque",
+            "Saint-Louis", "Sédhiou", "Tambacounda", "Thiadiaye", "Thiès", "Tivaouane",
+            "Touba", "Ziguinchor"
+        ),
         Country.TOGO to listOf(
-            "Adéta", "Aného", "Agbélouvé", "Amlamé", "Anié", "Atakpamé", "Badou",
+            "Adéta", "Agbélouvé", "Amlamé", "Aného", "Anié", "Atakpamé", "Badou",
             "Bafilo", "Bassar", "Blitta", "Cinkassé", "Dapaong", "Élavagnon",
             "Glidji", "Kandé", "Kanté", "Kara", "Kévé", "Kpalimé", "Kpéssi",
             "Lomé", "Mango", "Niamtougou", "Notsé", "Pagouda", "Sokodé",
@@ -70,6 +78,5 @@ object CityRepository {
         )
     )
 
-    fun citiesFor(country: Country): List<String> =
-        citiesByCountry[country]?.sorted().orEmpty()
+    fun citiesFor(country: Country): List<String> = citiesByCountry[country]?.sorted() ?: emptyList()
 }

@@ -40,6 +40,7 @@ object ImageStorage {
                 context.resources.getIdentifier(name, "drawable", context.packageName)
             }
             imageUrl.startsWith("/") -> File(imageUrl)
+            imageUrl.startsWith("file://") -> File(imageUrl.removePrefix("file://"))
             else -> imageUrl
         }
     }
