@@ -174,7 +174,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
 
         val remoteShops = shopsCollection.whereEqualTo("ownerUid", uid).get().await().documents
         for (doc in remoteShops) {
-            val remote = shopFromDocument(doc.id, doc.data) ?: continue
+            val remote = shopFromDocument(doc.id, doc.data ?: emptyMap<String, Any>()) ?: continue
             val existing = shopDao.findByRemoteId(doc.id)
             val localShop = remote.copy(id = existing?.id ?: 0, ownerId = restoredUser.id, ownerUid = uid)
             val localId = if (existing == null) shopDao.insert(localShop).toInt() else { shopDao.update(localShop); existing.id }
@@ -183,7 +183,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
 
         val remoteProducts = productsCollection.whereEqualTo("ownerUid", uid).get().await().documents
         for (doc in remoteProducts) {
-            val remote = productFromDocument(doc.id, doc.data) ?: continue
+            val remote = productFromDocument(doc.id, doc.data ?: emptyMap<String, Any>()) ?: continue
             val existing = productDao.findByRemoteId(doc.id)
             val localShopId = remote.shopRemoteId?.let { shopDao.findByRemoteId(it)?.id } ?: 0
             val localProduct = remote.copy(
@@ -291,7 +291,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
      * schéma Firestore explicite et on reconstruit les objets Room manuellement.
      * Cela corrige notamment "Class Shop does not define a no-argument constructor".
      */
-    private fun shopFromDocument(remoteId: String, data: Map<String, Any?>): Shop? {
+    private fun shopFromDocument(remoteId: String, data: Map<*, *>): Shop? {
         return try {
             val countryName = data["country"]?.toString() ?: return null
             val country = runCatching { Country.valueOf(countryName) }.getOrNull() ?: return null
@@ -320,7 +320,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         }
     }
 
-    private fun productFromDocument(remoteId: String, data: Map<String, Any?>): Product? {
+    private fun productFromDocument(remoteId: String, data: Map<*, *>): Product? {
         return try {
             val countryName = data["country"]?.toString() ?: return null
             val country = runCatching { Country.valueOf(countryName) }.getOrNull() ?: return null
