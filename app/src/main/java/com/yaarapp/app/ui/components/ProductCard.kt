@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,7 +49,8 @@ fun ProductCard(
     ) {
         Column {
             Box {
-                var imageFailed by androidx.compose.runtime.remember(product.imageUrl) { androidx.compose.runtime.mutableStateOf(false) }
+                val imageFailedState = androidx.compose.runtime.remember(product.imageUrl) { androidx.compose.runtime.mutableStateOf(false) }
+                val imageFailed = imageFailedState.value
                 AsyncImage(
                     model = ImageStorage.resolveImageModel(context, product.imageUrl),
                     contentDescription = product.name,
@@ -56,7 +59,7 @@ fun ProductCard(
                         .aspectRatio(1f)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentScale = ContentScale.Crop,
-                    onError = { imageFailed = true }
+                    onError = { imageFailedState.value = true }
                 )
                 if (imageFailed) {
                     Box(

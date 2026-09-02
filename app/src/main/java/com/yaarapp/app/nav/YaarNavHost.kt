@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -178,10 +179,11 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                     val productId = entry.arguments?.getInt("productId") ?: 0
                     val products by viewModel.allProducts.collectAsStateWithLifecycle()
                     val p = products.firstOrNull { it.id == productId }
-                    var chatShop by remember(productId) { mutableStateOf<com.yaarapp.app.data.Shop?>(null) }
-                    LaunchedEffect(p?.id) { chatShop = p?.let { viewModel.getShop(it.shopId) } }
+                    val chatShopState = remember(productId) { mutableStateOf<com.yaarapp.app.data.Shop?>(null) }
+                    LaunchedEffect(p?.id) { chatShopState.value = p?.let { viewModel.getShop(it.shopId) } }
+                    val chatShop = chatShopState.value
                     if (p != null && chatShop != null) {
-                        ChatScreen(product = p, shop = chatShop!!, viewModel = viewModel, onBack = { navController.popBackStack() })
+                        ChatScreen(product = p, shop = chatShop, viewModel = viewModel, onBack = { navController.popBackStack() })
                     }
                 }
                 composable(
