@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -24,9 +26,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yaarapp.app.data.Country
+import com.yaarapp.app.R
 import com.yaarapp.app.viewmodel.YaarViewModel
 
 /**
@@ -67,8 +71,8 @@ fun OnboardingLocationScreen(
             modifier = Modifier.weight(1f, fill = false)
         ) {
             items(Country.values().toList()) { c ->
-                SelectableRow(
-                    label = c.labelWithFlag,
+                SelectableCountryRow(
+                    country = c,
                     selected = c == country,
                     onClick = { viewModel.selectOnboardingCountry(c) }
                 )
@@ -116,6 +120,29 @@ private fun SectionLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 @Composable
 private fun SelectableRow(label: String, selected: Boolean, onClick: () -> Unit) {
     Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 0.dp else 1.dp),
+        onClick = onClick
+    ) {
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            if (selected) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun SelectableCountryRow(country: Country, selected: Boolean, onClick: () -> Unit) {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 0.dp),
@@ -134,7 +161,21 @@ private fun SelectableRow(label: String, selected: Boolean, onClick: () -> Unit)
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (country == Country.TOGO) {
+                    Image(
+                        painter = painterResource(id = R.drawable.flag_togo),
+                        contentDescription = "Drapeau du Togo",
+                        modifier = Modifier.size(32.dp, 22.dp).padding(end = 8.dp)
+                    )
+                } else {
+                    Text(country.flagEmoji, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 8.dp))
+                }
+                Text(country.displayName, style = MaterialTheme.typography.bodyLarge)
+            }
             if (selected) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }

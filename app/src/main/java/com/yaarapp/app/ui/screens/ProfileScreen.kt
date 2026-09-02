@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bolt
@@ -28,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -64,6 +68,7 @@ fun ProfileScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -74,7 +79,8 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(20.dp),
+                .padding(horizontal = 20.dp)
+                .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -147,43 +153,82 @@ fun ProfileScreen(
                         onClick = onMyAds,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp)
+                            .padding(top = 14.dp)
                     ) {
                         Icon(Icons.Filled.Bolt, contentDescription = null)
-                        Text(" Ma Publicité (${activeAdCampaigns.size} en cours)", modifier = Modifier.padding(start = 6.dp))
+                        Text(
+                            "Ma Publicité (${activeAdCampaigns.size} en cours)",
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
                     }
                 }
 
                 if (shop!!.certificationStatus == CertificationStatus.NONE) {
-                    OutlinedButton(
+                    Button(
                         onClick = onCertifyShop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp)
+                            .padding(top = 14.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                     ) {
                         Icon(Icons.Filled.VerifiedUser, contentDescription = null)
-                        Text(" Certifié ma boutique", modifier = Modifier.padding(start = 6.dp))
+                        Text(
+                            "Certifier ma boutique",
+                            modifier = Modifier.padding(start = 8.dp),
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }
 
-            OutlinedButton(
-                onClick = { password = ""; deleteError = null; showPasswordDialog = true },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-            ) {
-                Icon(Icons.Filled.DeleteForever, contentDescription = null)
-                Text(" Supprimer mon compte", modifier = Modifier.padding(start = 6.dp))
-            }
-
+            // Actions de compte : l'ordre volontairement affiché est
+            // Certification → Déconnexion → Suppression du compte.
+            // Le profil est défilable afin que ces trois actions restent accessibles
+            // même sur les petits écrans et avec la barre de navigation inférieure.
             OutlinedButton(
                 onClick = { viewModel.logout { onLoggedOut() } },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp)
+                    .padding(top = 12.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.secondary),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.secondary
+                )
             ) {
                 Icon(Icons.Filled.Logout, contentDescription = null)
-                Text(" Se déconnecter", modifier = Modifier.padding(start = 6.dp))
+                Text(
+                    "Se déconnecter",
+                    modifier = Modifier.padding(start = 8.dp),
+                    fontWeight = FontWeight.SemiBold
+                )
             }
+
+            OutlinedButton(
+                onClick = { password = ""; deleteError = null; showPasswordDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Icon(Icons.Filled.DeleteForever, contentDescription = null)
+                Text(
+                    "Supprimer mon compte",
+                    modifier = Modifier.padding(start = 8.dp),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(20.dp))
         }
 
         if (showPasswordDialog) {

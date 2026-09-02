@@ -47,20 +47,21 @@ class YaarRepository(context: Context) {
         whatsappNumber: String,
         password: String
     ): AuthResult {
+        val canonicalWhatsapp = com.yaarapp.app.firebase.FirebaseModule.normalizeWhatsapp(whatsappNumber)
         if (firstName.isBlank() || city.isBlank()) return AuthResult.Error("Merci de renseigner votre nom complet.")
-        if (whatsappNumber.length < 10) return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
+        if (canonicalWhatsapp.length < 10) return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
         if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
             return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         }
-        if (userDao.findByWhatsapp(whatsappNumber) != null) {
+        if (userDao.findByWhatsapp(canonicalWhatsapp) != null) {
             return AuthResult.Error("Un compte existe déjà avec ce numéro WhatsApp. Connectez-vous avec votre mot de passe.")
         }
 
         return try {
-            val uid = com.yaarapp.app.firebase.FirebaseModule.createEmailPasswordAccount(whatsappNumber, password)
+            val uid = com.yaarapp.app.firebase.FirebaseModule.createEmailPasswordAccount(canonicalWhatsapp, password)
             val user = User(
                 firstName = firstName, country = country, city = city,
-                whatsappNumber = whatsappNumber, firebaseUid = uid
+                whatsappNumber = canonicalWhatsapp, firebaseUid = uid
             )
             val id = userDao.insert(user).toInt()
             val created = user.copy(id = id)
@@ -88,14 +89,15 @@ class YaarRepository(context: Context) {
     }
 
     suspend fun login(whatsappNumber: String, password: String): AuthResult {
+        val canonicalWhatsapp = com.yaarapp.app.firebase.FirebaseModule.normalizeWhatsapp(whatsappNumber)
         if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
             return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         }
         return try {
-            val uid = com.yaarapp.app.firebase.FirebaseModule.signInWithWhatsappPassword(whatsappNumber, password)
-            var user = userDao.findByWhatsapp(whatsappNumber)
+            val uid = com.yaarapp.app.firebase.FirebaseModule.signInWithWhatsappPassword(canonicalWhatsapp, password)
+            var user = userDao.findByWhatsapp(canonicalWhatsapp)
             if (user == null) {
-                user = firestoreSync.createLocalUserFromCloud(uid, whatsappNumber)
+                user = firestoreSync.createLocalUserFromCloud(uid, canonicalWhatsapp)
             } else if (user.firebaseUid != uid) {
                 user = user.copy(firebaseUid = uid).also { userDao.update(it) }
             }

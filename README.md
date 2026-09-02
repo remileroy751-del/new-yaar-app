@@ -274,3 +274,7 @@ debug et le publie en tant qu'artefact téléchargeable.
 ---
 Basé sur le projet **Yaar-App** — identité, logique métier et photos de produits
 reprises de vos échanges et des fichiers fournis.
+
+
+## V1.2.1
+Voir `UPDATE_1_2_1.md` : boutons du profil renforcés, suppression Firebase approfondie et synchronisation robuste des photos produits via Firebase Storage.

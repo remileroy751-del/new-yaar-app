@@ -38,9 +38,41 @@ object FirebaseModule {
     val firestore: FirebaseFirestore get() = FirebaseFirestore.getInstance(requireDefaultApp())
     val storage: FirebaseStorage get() = FirebaseStorage.getInstance(requireDefaultApp())
 
-    /** Adresse technique Firebase correspondant au numéro WhatsApp. Aucun e-mail personnel n'est exposé. */
+    /**
+     * Normalise tous les formats historiques utilisés par Yaar-App vers le même
+     * identifiant international. Ainsi 00228..., 228... et +228... désignent
+     * le même compte Firebase.
+     */
+    fun normalizeWhatsapp(whatsappNumber: String): String {
+        var digits = whatsappNumber.filter { it.isDigit() }
+        while (digits.startsWith("00")) digits = digits.removePrefix("00")
+        val knownCountryCodes = listOf("228", "229", "226", "225", "223", "227", "221")
+        if (knownCountryCodes.none { digits.startsWith(it) }) {
+            // Format local : on ne peut pas deviner le pays sur l'écran de connexion.
+            // On conserve donc le numéro tel quel pour les comptes déjà créés.
+            return digits
+        }
+        return "00$digits"
+    }
+
+    /** Adresse technique Firebase correspondant au numéro WhatsApp. */
     fun authEmailForWhatsapp(whatsappNumber: String): String =
-        whatsappNumber.filter { it.isDigit() } + "@login.yaar-app.com"
+        normalizeWhatsapp(whatsappNumber) + "@login.yaar-app.com"
+
+    /**
+     * Adresses historiques à essayer lors d'une connexion, notamment pour les
+     * comptes créés avant la normalisation des numéros.
+     */
+    fun legacyAuthEmailsForWhatsapp(whatsappNumber: String): List<String> {
+        val digits = whatsappNumber.filter { it.isDigit() }
+        val without00 = digits.removePrefix("00")
+        val candidates = linkedSetOf(
+            authEmailForWhatsapp(whatsappNumber),
+            without00 + "@login.yaar-app.com",
+            digits + "@login.yaar-app.com"
+        )
+        return candidates.toList()
+    }
 
     fun isValidPassword(password: String): Boolean =
         password.matches(Regex("^[A-Za-z0-9]{6}$"))
@@ -65,8 +97,20 @@ object FirebaseModule {
 
     suspend fun signInWithWhatsappPassword(whatsappNumber: String, password: String): String {
         require(isValidPassword(password)) { "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement." }
-        val result = auth.signInWithEmailAndPassword(authEmailForWhatsapp(whatsappNumber), password).await()
-        return result.user?.uid ?: error("Firebase n'a pas retourné l'identifiant du compte.")
+        var lastError: Exception? = null
+        for (email in legacyAuthEmailsForWhatsapp(whatsappNumber)) {
+            try {
+                val result = auth.signInWithEmailAndPassword(email, password).await()
+                return result.user?.uid ?: error("Firebase n'a pas retourné l'identifiant du compte.")
+            } catch (e: Exception) {
+                lastError = e
+                val code = (e as? com.google.firebase.auth.FirebaseAuthException)?.errorCode.orEmpty().lowercase()
+                // Si le mot de passe est réellement faux, inutile de multiplier les tentatives.
+                if (code.contains("wrong-password") || code.contains("invalid-credential") ||
+                    code.contains("invalid-login-credentials")) continue
+            }
+        }
+        throw lastError ?: IllegalStateException("Impossible de se connecter à Firebase.")
     }
 
     suspend fun reauthenticateWithPassword(whatsappNumber: String, password: String) {

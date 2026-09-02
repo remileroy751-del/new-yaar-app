@@ -239,10 +239,18 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     suspend fun syncShopNow(shop: Shop): Shop {
         val uid = shop.ownerUid ?: FirebaseModule.auth.currentUser?.uid
             ?: throw IllegalStateException("Compte Firebase introuvable.")
-        val logoUrl = shop.logoUrl?.let { uploadImageIfLocal("shops", it) }
         val docRef = shop.remoteId?.let { shopsCollection.document(it) } ?: shopsCollection.document()
-        val toSync = shop.copy(ownerUid = uid, logoUrl = logoUrl ?: shop.logoUrl, remoteId = docRef.id)
-        docRef.set(shopToMap(toSync)).await()
+        val uploadedLogo = shop.logoUrl?.let { uploadImageIfLocal("shops", it, docRef.id) }
+        val uploadedFront = shop.idCardFrontUrl?.let { uploadImageIfLocal("id_cards", it, "${docRef.id}_front") }
+        val uploadedBack = shop.idCardBackUrl?.let { uploadImageIfLocal("id_cards", it, "${docRef.id}_back") }
+        val toSync = shop.copy(
+            ownerUid = uid,
+            logoUrl = uploadedLogo?.url ?: shop.logoUrl,
+            idCardFrontUrl = uploadedFront?.url ?: shop.idCardFrontUrl,
+            idCardBackUrl = uploadedBack?.url ?: shop.idCardBackUrl,
+            remoteId = docRef.id
+        )
+        docRef.set(shopToMap(toSync, uploadedLogo?.storagePath)).await()
         shopDao.update(toSync)
         return toSync
     }
@@ -263,16 +271,19 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         val shopRemoteId = product.shopRemoteId ?: localShop?.remoteId ?: localShop?.let {
             syncShopNow(it.copy(ownerUid = uid)).remoteId
         }
-        val imageUrl = uploadImageIfLocal("products", product.imageUrl)
+        // Le document Firestore est réservé avant l'upload afin que le nom du fichier
+        // Storage soit stable. Une nouvelle tentative réutilise ainsi le même fichier
+        // au lieu de créer une photo orpheline à chaque retry.
         val docRef = product.remoteId?.let { productsCollection.document(it) } ?: productsCollection.document()
+        val uploadedImage = uploadImageIfLocal("products", product.imageUrl, docRef.id)
         val toSync = product.copy(
             ownerUid = uid,
             shopRemoteId = shopRemoteId,
             availableCities = product.availableCities.ifEmpty { listOf(product.city) },
-            imageUrl = imageUrl,
+            imageUrl = uploadedImage.url,
             remoteId = docRef.id
         )
-        docRef.set(productToMap(toSync)).await()
+        docRef.set(productToMap(toSync, uploadedImage.storagePath)).await()
         productDao.update(toSync)
         return toSync
     }
@@ -362,26 +373,29 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         }
     }
 
-    private fun shopToMap(shop: Shop): Map<String, Any?> = mapOf(
+    private fun shopToMap(shop: Shop, logoStoragePath: String? = null): Map<String, Any?> = mapOf(
         "ownerUid" to shop.ownerUid,
         "name" to shop.name,
         "whatsappNumber" to shop.whatsappNumber,
         "country" to shop.country.name,
         "city" to shop.city,
         "logoUrl" to shop.logoUrl,
+        "logoStoragePath" to (logoStoragePath ?: shop.logoUrl?.let { storagePathFromUrl(it) }),
         "activityDescription" to shop.activityDescription,
         "categories" to shop.categories,
         "extraProductSlots" to shop.extraProductSlots,
         "certificationStatus" to shop.certificationStatus.name,
         "idCardFrontUrl" to shop.idCardFrontUrl,
         "idCardBackUrl" to shop.idCardBackUrl,
+        "idCardFrontStoragePath" to shop.idCardFrontUrl?.let { storagePathFromUrl(it) },
+        "idCardBackStoragePath" to shop.idCardBackUrl?.let { storagePathFromUrl(it) },
         "certificationRequestedAt" to shop.certificationRequestedAt,
         "certificationPaidAt" to shop.certificationPaidAt,
         "certificationExpiresAt" to shop.certificationExpiresAt,
         "createdAt" to shop.createdAt
     )
 
-    private fun productToMap(product: Product): Map<String, Any?> = mapOf(
+    private fun productToMap(product: Product, imageStoragePath: String? = null): Map<String, Any?> = mapOf(
         "ownerUid" to product.ownerUid,
         "shopRemoteId" to product.shopRemoteId,
         "shopName" to product.shopName,
@@ -389,7 +403,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         "description" to product.description,
         "price" to product.price,
         "imageUrl" to product.imageUrl,
-        "imageStoragePath" to storagePathFromUrl(product.imageUrl),
+        "imageStoragePath" to (imageStoragePath ?: storagePathFromUrl(product.imageUrl)),
         "category" to product.category,
         "country" to product.country.name,
         "city" to product.city,
@@ -401,8 +415,12 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     )
 
     private fun storagePathFromUrl(url: String): String? = try {
-        if (url.startsWith("https://firebasestorage.googleapis.com/") || url.startsWith("gs://")) url else null
+        if (url.startsWith("gs://") || url.startsWith("https://firebasestorage.googleapis.com/")) {
+            FirebaseModule.storage.getReferenceFromUrl(url).path
+        } else null
     } catch (_: Exception) { null }
+
+    private data class RemoteImage(val url: String, val storagePath: String?)
 
     // ---------- Suppression complète du compte ----------
     suspend fun deleteAccountData(uid: String) {
@@ -416,27 +434,71 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         }
         val conversations = conversationsCollection.whereArrayContains("participants", uid).get().await().documents
 
+        // Supprime les fichiers connus par les documents Firestore. Les chemins explicites
+        // imageStoragePath/idCardStoragePath permettent aussi de supprimer les fichiers
+        // même si une ancienne URL de téléchargement n'est plus exploitable.
         for (doc in productMap.values) {
-            deleteStorageFileFromUrl(doc.getString("imageUrl"))
+            deleteStorageFile(doc.getString("imageStoragePath"), doc.getString("imageUrl"))
             productsCollection.document(doc.id).delete().await()
         }
         for (doc in shopDocs) {
-            deleteStorageFileFromUrl(doc.getString("logoUrl"))
-            deleteStorageFileFromUrl(doc.getString("idCardFrontUrl"))
-            deleteStorageFileFromUrl(doc.getString("idCardBackUrl"))
+            deleteStorageFile(doc.getString("logoStoragePath"), doc.getString("logoUrl"))
+            deleteStorageFile(doc.getString("idCardFrontStoragePath"), doc.getString("idCardFrontUrl"))
+            deleteStorageFile(doc.getString("idCardBackStoragePath"), doc.getString("idCardBackUrl"))
             shopsCollection.document(doc.id).delete().await()
         }
+
+        // Nettoyage des anciennes données associées éventuellement présentes dans le cloud.
+        // Les versions locales de Yaar-App utilisaient encore des identifiants Room ; ces
+        // requêtes restent sans effet si ces collections ne sont pas utilisées.
+        deleteMatchingDocuments("interests", listOf("buyerUid", "shopOwnerUid", "ownerUid", "userUid"), uid)
+        deleteMatchingDocuments("ad_campaigns", listOf("ownerUid", "shopOwnerUid", "userUid"), uid)
+
         for (conversation in conversations) {
             val messages = conversation.reference.collection("messages").get().await().documents
             for (message in messages) message.reference.delete().await()
             conversation.reference.delete().await()
         }
+
+        // Filet de sécurité : supprime les fichiers encore présents dans les dossiers
+        // appartenant directement à l'utilisateur (produits, boutique). Les pièces d'identité
+        // restent protégées par les règles Storage et doivent être supprimées côté Admin.
+        deleteStorageFolder("products/$uid")
+        deleteStorageFolder("shops/$uid")
         usersCollection.document(uid).delete().await()
     }
 
-    private suspend fun deleteStorageFileFromUrl(value: String?) {
-        if (value.isNullOrBlank()) return
-        runCatching { FirebaseModule.storage.getReferenceFromUrl(value).delete().await() }
+    private suspend fun deleteStorageFile(storagePath: String?, downloadUrl: String?) {
+        val target = storagePath?.takeIf { it.isNotBlank() } ?: downloadUrl?.takeIf { it.isNotBlank() }
+        if (target.isNullOrBlank()) return
+        runCatching {
+            val ref = if (target.startsWith("gs://") || target.startsWith("https://")) {
+                FirebaseModule.storage.getReferenceFromUrl(target)
+            } else {
+                FirebaseModule.storage.reference.child(target.trimStart('/'))
+            }
+            ref.delete().await()
+        }
+    }
+
+    private suspend fun deleteStorageFolder(path: String) {
+        runCatching {
+            val ref = FirebaseModule.storage.reference.child(path)
+            val listing = ref.listAll().await()
+            listing.items.forEach { it.delete().await() }
+            listing.prefixes.forEach { prefix -> deleteStorageFolder(prefix.path) }
+        }
+    }
+
+    private suspend fun deleteMatchingDocuments(collection: String, fields: List<String>, uid: String) {
+        val refs = linkedMapOf<String, com.google.firebase.firestore.DocumentReference>()
+        for (field in fields) {
+            runCatching {
+                firestore.collection(collection).whereEqualTo(field, uid).get().await().documents
+                    .forEach { refs[it.reference.path] = it.reference }
+            }
+        }
+        refs.values.forEach { it.delete().await() }
     }
 
     suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) {
@@ -543,20 +605,24 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     private fun normalizeLocalImagePath(value: String): String =
         value.removePrefix("file://")
 
-    private suspend fun uploadImageIfLocal(folder: String, imageUrl: String): String {
-        if (imageUrl.startsWith("res:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl
-        if (imageUrl.isBlank()) return ""
+    private suspend fun uploadImageIfLocal(folder: String, imageUrl: String, stableId: String): RemoteImage {
+        if (imageUrl.startsWith("res:")) return RemoteImage(imageUrl, null)
+        if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+            return RemoteImage(imageUrl, storagePathFromUrl(imageUrl))
+        }
+        if (imageUrl.isBlank()) return RemoteImage("", null)
         val path = normalizeLocalImagePath(imageUrl)
         val file = File(path)
         if (!file.exists() || !file.isFile || file.length() == 0L) {
-            throw IllegalStateException("La photo du produit est introuvable sur cet appareil.")
+            throw IllegalStateException("La photo est introuvable sur cet appareil.")
         }
         return try {
             val uid = FirebaseModule.auth.currentUser?.uid ?: throw IllegalStateException("Compte Firebase introuvable.")
             val extension = if (file.extension.lowercase() == "png") "png" else "jpg"
-            val ref = FirebaseModule.storage.reference.child("$folder/$uid/${UUID.randomUUID()}.$extension")
+            val storagePath = "$folder/$uid/$stableId.$extension"
+            val ref = FirebaseModule.storage.reference.child(storagePath)
             ref.putFile(Uri.fromFile(file)).await()
-            ref.downloadUrl.await().toString()
+            RemoteImage(ref.downloadUrl.await().toString(), ref.path)
         } catch (e: Exception) {
             Log.e(TAG, "Upload image échoué pour $imageUrl", e)
             throw IllegalStateException("Impossible d'envoyer la photo vers Firebase Storage : ${e.message}", e)
@@ -564,10 +630,19 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     }
 
     private suspend fun resolveRemoteImageUrl(value: String, storagePath: String?): String {
+        // Le chemin Storage explicite est prioritaire : il permet de réparer une URL
+        // historique/abîmée et garantit que tous les téléphones récupèrent la même photo.
+        if (!storagePath.isNullOrBlank()) {
+            val resolved = runCatching {
+                FirebaseModule.storage.reference.child(storagePath.trimStart('/')).downloadUrl.await().toString()
+            }.getOrNull()
+            if (!resolved.isNullOrBlank()) return resolved
+        }
         if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("res:")) return value
-        val path = storagePath?.takeIf { it.isNotBlank() } ?: value.takeIf { it.startsWith("gs://") }
+        val path = value.takeIf { it.startsWith("gs://") }
         return if (path != null) {
             runCatching { FirebaseModule.storage.getReferenceFromUrl(path).downloadUrl.await().toString() }.getOrElse { value }
         } else value
     }
+
 }
