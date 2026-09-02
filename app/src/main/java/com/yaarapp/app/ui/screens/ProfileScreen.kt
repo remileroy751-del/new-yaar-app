@@ -10,6 +10,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -22,13 +25,22 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yaarapp.app.data.CertificationStatus
 import com.yaarapp.app.data.maxProducts
@@ -45,6 +57,12 @@ fun ProfileScreen(
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val shop by viewModel.myShop.collectAsStateWithLifecycle()
     val activeAdCampaigns by viewModel.activeAdCampaigns.collectAsStateWithLifecycle()
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var showFinalDialog by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -149,6 +167,14 @@ fun ProfileScreen(
             }
 
             OutlinedButton(
+                onClick = { password = ""; deleteError = null; showPasswordDialog = true },
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+            ) {
+                Icon(Icons.Filled.DeleteForever, contentDescription = null)
+                Text(" Supprimer mon compte", modifier = Modifier.padding(start = 6.dp))
+            }
+
+            OutlinedButton(
                 onClick = { viewModel.logout { onLoggedOut() } },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -157,6 +183,50 @@ fun ProfileScreen(
                 Icon(Icons.Filled.Logout, contentDescription = null)
                 Text(" Se déconnecter", modifier = Modifier.padding(start = 6.dp))
             }
+        }
+
+        if (showPasswordDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!deleting) showPasswordDialog = false },
+                title = { Text("Supprimer mon compte") },
+                text = {
+                    Column {
+                        Text("Saisissez le mot de passe de votre compte pour continuer.")
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { if (it.length <= 6 && it.all(Char::isLetterOrDigit)) password = it },
+                            label = { Text("Mot de passe") },
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = { IconButton(onClick = { passwordVisible = !passwordVisible }) { Icon(if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, null) } },
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        deleteError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) }
+                    }
+                },
+                confirmButton = {
+                    Button(enabled = password.length == 6 && !deleting, onClick = { showPasswordDialog = false; showFinalDialog = true }) { Text("Continuer") }
+                },
+                dismissButton = { TextButton(enabled = !deleting, onClick = { showPasswordDialog = false }) { Text("Annuler") } }
+            )
+        }
+
+        if (showFinalDialog) {
+            AlertDialog(
+                onDismissRequest = { if (!deleting) showFinalDialog = false },
+                title = { Text("Confirmation définitive") },
+                text = { Text("Votre compte sera supprimé avec toutes vos données.") },
+                confirmButton = {
+                    Button(enabled = !deleting, onClick = {
+                        deleting = true
+                        viewModel.deleteAccount(password,
+                            onSuccess = { deleting = false; showFinalDialog = false; password = ""; onLoggedOut() },
+                            onError = { deleting = false; showFinalDialog = false; deleteError = it; showPasswordDialog = true }
+                        )
+                    }) { Text(if (deleting) "Patientez…" else "Confirmer") }
+                },
+                dismissButton = { TextButton(enabled = !deleting, onClick = { showFinalDialog = false }) { Text("Annuler") } }
+            )
         }
     }
 }

@@ -19,4 +19,7 @@ interface InterestDao {
 
     @Update
     suspend fun update(interest: Interest)
+
+    @Query("DELETE FROM interests WHERE shopOwnerId = :ownerId OR buyerId = :ownerId")
+    suspend fun deleteAllForUser(ownerId: Int)
 }

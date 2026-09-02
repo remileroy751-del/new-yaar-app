@@ -48,7 +48,7 @@ import com.yaarapp.app.viewmodel.YaarViewModel
 
 /**
  * "Certifié ma boutique" : le vendeur envoie la photo recto puis verso de sa pièce
- * d'identité, puis paie l'étude du dossier ([CertificationConfig.PRICE_FCFA] FCFA) via
+ * d'identité, puis paie l'étude du dossier (2 000 FCFA par mois) via
  * Kkiapay. Le statut passe alors à "en cours d'étude" (voir CertificationStatus).
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,12 +126,12 @@ fun CertifyShopScreen(
             ) {
                 Row(modifier = Modifier.padding(12.dp)) {
                     Icon(Icons.Filled.Info, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text(CertificationConfig.GROWTH_NOTICE, style = MaterialTheme.typography.bodySmall)
+                    Text("La certification est facturée 2 000 FCFA par mois. Le paiement correspond à une période de 30 jours.", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
             Text(
-                "${CertificationConfig.PRICE_FCFA} FCFA",
+                "${CertificationConfig.MONTHLY_PRICE_FCFA} FCFA / mois",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -156,7 +156,7 @@ fun CertifyShopScreen(
                     .padding(top = 16.dp),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Text("Continuer vers le paiement — ${CertificationConfig.PRICE_FCFA} FCFA")
+                Text("Continuer vers le paiement — ${CertificationConfig.MONTHLY_PRICE_FCFA} FCFA / mois")
             }
         }
     }

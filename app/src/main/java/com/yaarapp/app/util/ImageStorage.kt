@@ -2,46 +2,35 @@ package com.yaarapp.app.util
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
-/**
- * Copie une photo choisie dans la galerie (via le sélecteur de photos Android,
- * qui ne nécessite pas de permission de stockage) vers le stockage interne de
- * l'application, afin que la photo du produit reste accessible même après un
- * redémarrage du téléphone.
- */
 object ImageStorage {
-
     fun saveToInternalStorage(context: Context, sourceUri: Uri): String? {
         return try {
-            val productImagesDir = File(context.filesDir, "product_images").apply { mkdirs() }
-            val destFile = File(productImagesDir, "${UUID.randomUUID()}.jpg")
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                destFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+            val dir = File(context.filesDir, "product_images").apply { mkdirs() }
+            val destFile = File(dir, "${UUID.randomUUID()}.jpg")
+            val bitmap = context.contentResolver.openInputStream(sourceUri)?.use { BitmapFactory.decodeStream(it) }
+                ?: return null
+            FileOutputStream(destFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
             }
-            destFile.absolutePath
-        } catch (e: Exception) {
-            null
-        }
+            bitmap.recycle()
+            if (destFile.length() > 0L) destFile.absolutePath else null
+        } catch (_: Exception) { null }
     }
 
-    /**
-     * Traduit une valeur `Product.imageUrl` en modèle utilisable par Coil
-     * (identifiant de ressource pour les produits de démo, fichier local pour
-     * les photos importées, chaîne brute sinon - ex. URL distante).
-     */
-    fun resolveImageModel(context: Context, imageUrl: String): Any {
+    fun resolveImageModel(context: Context, imageUrl: String): Any? {
         return when {
-            imageUrl.startsWith("res:") -> {
-                val name = imageUrl.removePrefix("res:")
-                context.resources.getIdentifier(name, "drawable", context.packageName)
-            }
+            imageUrl.startsWith("res:") -> context.resources.getIdentifier(imageUrl.removePrefix("res:"), "drawable", context.packageName)
             imageUrl.startsWith("/") -> File(imageUrl)
             imageUrl.startsWith("file://") -> File(imageUrl.removePrefix("file://"))
-            else -> imageUrl
+            imageUrl.startsWith("content://") -> Uri.parse(imageUrl)
+            imageUrl.startsWith("http://") || imageUrl.startsWith("https://") -> imageUrl
+            else -> imageUrl.takeIf { it.isNotBlank() }
         }
     }
 }

@@ -53,7 +53,8 @@ fun ProductDetailScreen(
     productId: Int,
     viewModel: YaarViewModel,
     onBack: () -> Unit,
-    onViewShop: (Int) -> Unit = {}
+    onViewShop: (Int) -> Unit = {},
+    onChatSupplier: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var product by remember { mutableStateOf<Product?>(null) }
@@ -154,6 +155,22 @@ fun ProductDetailScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(top = 16.dp)
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onChatSupplier,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Discuter avec le fournisseur ici") }
+                    OutlinedButton(
+                        onClick = { shop?.let { WhatsAppHelper.discussProduct(context, p, it) } },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Discuter sur WhatsApp") }
+                }
 
                 OutlinedButton(
                     onClick = {

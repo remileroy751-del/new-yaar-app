@@ -12,6 +12,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ fun ProductCard(
     ) {
         Column {
             Box {
+                var imageFailed by androidx.compose.runtime.remember(product.imageUrl) { androidx.compose.runtime.mutableStateOf(false) }
                 AsyncImage(
                     model = ImageStorage.resolveImageModel(context, product.imageUrl),
                     contentDescription = product.name,
@@ -53,8 +55,15 @@ fun ProductCard(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    onError = { imageFailed = true }
                 )
+                if (imageFailed) {
+                    Box(
+                        modifier = Modifier.matchParentSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Photo indisponible", style = MaterialTheme.typography.labelMedium) }
+                }
                 if (product.isPromoted) {
                     Box(
                         modifier = Modifier

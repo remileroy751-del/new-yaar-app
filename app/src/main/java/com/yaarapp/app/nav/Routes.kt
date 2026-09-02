@@ -2,6 +2,7 @@ package com.yaarapp.app.nav
 
 object Routes {
     const val SPLASH = "splash"
+    const val TERMS = "terms"
     const val ONBOARDING_LOCATION = "onboarding_location" // choix pays + ville, avant inscription
     const val LOGIN = "login"
     const val SIGNUP = "signup"
@@ -11,6 +12,7 @@ object Routes {
     const val SEARCH = "search"                     // recherche par mot-clé + ville
     const val PRODUCT_DETAIL = "product/{productId}"
     const val CART = "cart"
+    const val CHAT = "chat/{productId}"
 
     const val MY_SHOP = "my_shop"                   // "Ma boutique"
     const val CREATE_SHOP = "create_shop"
@@ -31,4 +33,5 @@ object Routes {
 
     fun productDetail(productId: Int) = "product/$productId"
     fun shopPublic(shopId: Int) = "shop_public/$shopId"
+    fun chat(productId: Int) = "chat/$productId"
 }

@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -29,6 +31,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     private val usersCollection get() = firestore.collection("users")
     private val shopsCollection get() = firestore.collection("shops")
     private val productsCollection get() = firestore.collection("products")
+    private val conversationsCollection get() = firestore.collection("conversations")
 
     private val _lastSyncEvent = MutableStateFlow<String?>(null)
     val lastSyncEvent: StateFlow<String?> = _lastSyncEvent
@@ -158,6 +161,8 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
     suspend fun restoreAccount(localUser: User): User {
         val uid = localUser.firebaseUid ?: FirebaseModule.auth.currentUser?.uid
             ?: return localUser
+        // Une fois le compte authentifié, on peut enfin réparer les anciennes photos locales.
+        repairOwnedProductImages(uid)
 
         val userDoc = usersCollection.document(uid).get().await()
         val restoredUser = if (userDoc.exists()) {
@@ -315,6 +320,8 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 idCardFrontUrl = data["idCardFrontUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
                 idCardBackUrl = data["idCardBackUrl"]?.toString()?.takeIf { it.isNotBlank() && it != "null" },
                 certificationRequestedAt = numberLongOrNull(data["certificationRequestedAt"]),
+                certificationPaidAt = numberLongOrNull(data["certificationPaidAt"]),
+                certificationExpiresAt = numberLongOrNull(data["certificationExpiresAt"]),
                 createdAt = numberLong(data["createdAt"], System.currentTimeMillis()),
                 remoteId = remoteId
             )
@@ -324,7 +331,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         }
     }
 
-    private fun productFromDocument(remoteId: String, data: Map<*, *>): Product? {
+    private suspend fun productFromDocument(remoteId: String, data: Map<*, *>): Product? {
         return try {
             val countryName = data["country"]?.toString() ?: return null
             val country = runCatching { Country.valueOf(countryName) }.getOrNull() ?: return null
@@ -336,7 +343,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
                 name = data["name"]?.toString().orEmpty(),
                 description = data["description"]?.toString().orEmpty(),
                 price = numberDouble(data["price"]),
-                imageUrl = data["imageUrl"]?.toString().orEmpty(),
+                imageUrl = resolveRemoteImageUrl(data["imageUrl"]?.toString().orEmpty(), data["imageStoragePath"]?.toString()),
                 category = data["category"]?.toString().orEmpty().ifBlank { "Divers" },
                 country = country,
                 city = city,
@@ -369,6 +376,8 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         "idCardFrontUrl" to shop.idCardFrontUrl,
         "idCardBackUrl" to shop.idCardBackUrl,
         "certificationRequestedAt" to shop.certificationRequestedAt,
+        "certificationPaidAt" to shop.certificationPaidAt,
+        "certificationExpiresAt" to shop.certificationExpiresAt,
         "createdAt" to shop.createdAt
     )
 
@@ -380,6 +389,7 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         "description" to product.description,
         "price" to product.price,
         "imageUrl" to product.imageUrl,
+        "imageStoragePath" to storagePathFromUrl(product.imageUrl),
         "category" to product.category,
         "country" to product.country.name,
         "city" to product.city,
@@ -389,6 +399,85 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
         "activatedAt" to product.activatedAt,
         "isPromoted" to product.isPromoted
     )
+
+    private fun storagePathFromUrl(url: String): String? = try {
+        if (url.startsWith("https://firebasestorage.googleapis.com/") || url.startsWith("gs://")) url else null
+    } catch (_: Exception) { null }
+
+    // ---------- Suppression complète du compte ----------
+    suspend fun deleteAccountData(uid: String) {
+        val shopDocs = shopsCollection.whereEqualTo("ownerUid", uid).get().await().documents
+        val productMap = linkedMapOf<String, com.google.firebase.firestore.DocumentSnapshot>()
+        productsCollection.whereEqualTo("ownerUid", uid).get().await().documents.forEach { productMap[it.id] = it }
+        // Compatibilité avec d'anciens produits qui n'avaient pas encore ownerUid mais
+        // qui possèdent déjà le shopRemoteId d'une boutique appartenant au compte.
+        for (shop in shopDocs) {
+            productsCollection.whereEqualTo("shopRemoteId", shop.id).get().await().documents.forEach { productMap[it.id] = it }
+        }
+        val conversations = conversationsCollection.whereArrayContains("participants", uid).get().await().documents
+
+        for (doc in productMap.values) {
+            deleteStorageFileFromUrl(doc.getString("imageUrl"))
+            productsCollection.document(doc.id).delete().await()
+        }
+        for (doc in shopDocs) {
+            deleteStorageFileFromUrl(doc.getString("logoUrl"))
+            deleteStorageFileFromUrl(doc.getString("idCardFrontUrl"))
+            deleteStorageFileFromUrl(doc.getString("idCardBackUrl"))
+            shopsCollection.document(doc.id).delete().await()
+        }
+        for (conversation in conversations) {
+            val messages = conversation.reference.collection("messages").get().await().documents
+            for (message in messages) message.reference.delete().await()
+            conversation.reference.delete().await()
+        }
+        usersCollection.document(uid).delete().await()
+    }
+
+    private suspend fun deleteStorageFileFromUrl(value: String?) {
+        if (value.isNullOrBlank()) return
+        runCatching { FirebaseModule.storage.getReferenceFromUrl(value).delete().await() }
+    }
+
+    suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) {
+        val sellerUid = shop.ownerUid ?: product.ownerUid ?: throw IllegalStateException("Fournisseur indisponible")
+        val buyerUid = buyer.firebaseUid ?: throw IllegalStateException("Compte Firebase indisponible")
+        require(sellerUid != buyerUid) { "Vous ne pouvez pas démarrer une discussion avec votre propre boutique." }
+        val conversationId = listOf(buyerUid, sellerUid, product.remoteId ?: product.id.toString()).joinToString("_")
+        val ref = conversationsCollection.document(conversationId)
+        ref.set(mapOf(
+            "buyerUid" to buyerUid,
+            "sellerUid" to sellerUid,
+            "productRemoteId" to product.remoteId,
+            "productName" to product.name,
+            "productPrice" to product.price,
+            "shopName" to shop.name,
+            "participants" to listOf(buyerUid, sellerUid)
+        ), com.google.firebase.firestore.SetOptions.merge()).await()
+        ref.collection("messages").add(mapOf(
+            "senderUid" to buyerUid,
+            "senderName" to buyer.firstName,
+            "text" to text.trim(),
+            "createdAt" to System.currentTimeMillis()
+        )).await()
+    }
+
+    fun observeChatMessages(conversationId: String): kotlinx.coroutines.flow.Flow<List<ChatMessage>> = kotlinx.coroutines.flow.callbackFlow {
+        val listener = conversationsCollection.document(conversationId).collection("messages")
+            .orderBy("createdAt")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                trySend(snapshot?.documents?.map { d ->
+                    ChatMessage(d.id, d.getString("senderUid").orEmpty(), d.getString("senderName").orEmpty(), d.getString("text").orEmpty(), d.getLong("createdAt") ?: 0L)
+                }.orEmpty()).isSuccess
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun conversationId(product: Product, shop: Shop, buyer: User): String {
+        val sellerUid = shop.ownerUid ?: product.ownerUid.orEmpty()
+        return listOf(buyer.firebaseUid.orEmpty(), sellerUid, product.remoteId ?: product.id.toString()).joinToString("_")
+    }
 
     private fun stringList(value: Any?): List<String> = when (value) {
         is List<*> -> value.mapNotNull { it?.toString() }.filter { it.isNotBlank() }
@@ -456,21 +545,29 @@ class FirestoreSync(context: Context, private val db: YaarDatabase) {
 
     private suspend fun uploadImageIfLocal(folder: String, imageUrl: String): String {
         if (imageUrl.startsWith("res:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl
+        if (imageUrl.isBlank()) return ""
+        val path = normalizeLocalImagePath(imageUrl)
+        val file = File(path)
+        if (!file.exists() || !file.isFile || file.length() == 0L) {
+            throw IllegalStateException("La photo du produit est introuvable sur cet appareil.")
+        }
         return try {
-            val path = normalizeLocalImagePath(imageUrl)
-            val file = File(path)
-            if (!file.exists() || !file.isFile || file.length() == 0L) return imageUrl
-            val extension = when (file.extension.lowercase()) {
-                "png" -> "png"
-                "webp" -> "webp"
-                else -> "jpg"
-            }
-            val ref = FirebaseModule.storage.reference.child("$folder/${UUID.randomUUID()}.$extension")
+            val uid = FirebaseModule.auth.currentUser?.uid ?: throw IllegalStateException("Compte Firebase introuvable.")
+            val extension = if (file.extension.lowercase() == "png") "png" else "jpg"
+            val ref = FirebaseModule.storage.reference.child("$folder/$uid/${UUID.randomUUID()}.$extension")
             ref.putFile(Uri.fromFile(file)).await()
             ref.downloadUrl.await().toString()
         } catch (e: Exception) {
-            Log.w(TAG, "Upload image échoué pour $imageUrl: ${e.message}")
-            imageUrl
+            Log.e(TAG, "Upload image échoué pour $imageUrl", e)
+            throw IllegalStateException("Impossible d'envoyer la photo vers Firebase Storage : ${e.message}", e)
         }
+    }
+
+    private suspend fun resolveRemoteImageUrl(value: String, storagePath: String?): String {
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("res:")) return value
+        val path = storagePath?.takeIf { it.isNotBlank() } ?: value.takeIf { it.startsWith("gs://") }
+        return if (path != null) {
+            runCatching { FirebaseModule.storage.getReferenceFromUrl(path).downloadUrl.await().toString() }.getOrElse { value }
+        } else value
     }
 }

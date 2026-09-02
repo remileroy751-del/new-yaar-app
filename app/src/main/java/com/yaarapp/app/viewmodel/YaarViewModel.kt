@@ -41,6 +41,22 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
+    companion object {
+        const val TERMS_VERSION = 1
+    }
+
+    /** Vrai lorsque les conditions correspondant à la version courante ont été acceptées. */
+    val termsAccepted: StateFlow<Boolean> = repository.session.acceptedTermsVersion
+        .map { it >= TERMS_VERSION }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun acceptTerms(onDone: () -> Unit) {
+        viewModelScope.launch {
+            repository.session.acceptTerms(TERMS_VERSION)
+            onDone()
+        }
+    }
+
     /** Les anciens comptes de la version précédente doivent définir un mot de passe une seule fois. */
     val needsAccountUpgrade: StateFlow<Boolean> = _currentUser
         .map { it != null && it.firebaseUid == null }
@@ -391,8 +407,8 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
         /** Bouton "Certifié ma boutique" : étude du dossier d'identité. */
         object ShopCertification : PendingPayment() {
-            override val amountFcfa get() = CertificationConfig.PRICE_FCFA
-            override val description get() = "Étude de dossier de certification — Yaar-App"
+            override val amountFcfa get() = CertificationConfig.MONTHLY_PRICE_FCFA
+            override val description get() = "Certification de boutique Yaar-App — 2 000 FCFA / mois"
         }
     }
 
@@ -529,6 +545,36 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     val cartItemCount: StateFlow<Int> =
         cartItems.map { items -> items.sumOf { it.quantity } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun chatConversationId(product: Product, shop: Shop): String? {
+        val buyer = _currentUser.value ?: return null
+        if (buyer.firebaseUid == null) return null
+        return repository.conversationId(product, shop, buyer)
+    }
+
+    fun observeChatMessages(conversationId: String): kotlinx.coroutines.flow.Flow<List<com.yaarapp.app.data.ChatMessage>> =
+        repository.observeChatMessages(conversationId)
+
+    fun sendChatMessage(product: Product, shop: Shop, text: String, onResult: (String?) -> Unit = {}) {
+        val buyer = _currentUser.value
+        if (buyer == null || buyer.firebaseUid == null) { onResult("Veuillez vous connecter pour discuter avec le fournisseur."); return }
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            runCatching { repository.sendChatMessage(product, shop, buyer, text) }
+                .onSuccess { onResult(null) }
+                .onFailure { onResult(it.message ?: "Impossible d'envoyer le message.") }
+        }
+    }
+
+    fun deleteAccount(password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val user = _currentUser.value
+        if (user == null) { onError("Aucun compte connecté."); return }
+        viewModelScope.launch {
+            runCatching { repository.deleteAccount(user, password) }
+                .onSuccess { _currentUser.value = null; onSuccess() }
+                .onFailure { onError(it.message ?: "Impossible de supprimer le compte.") }
+        }
+    }
 
     fun addToCart(product: Product, shop: Shop) {
         val userId = currentUserId.value ?: return

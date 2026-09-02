@@ -126,6 +126,35 @@ class YaarRepository(context: Context) {
         runCatching { com.yaarapp.app.firebase.FirebaseModule.signOut() }
     }
 
+    /** Supprime définitivement le compte Firebase, toutes ses données cloud et ses données locales. */
+    suspend fun deleteAccount(user: User, password: String) {
+        val uid = user.firebaseUid ?: throw IllegalStateException("Ce compte ne possède pas encore de connexion sécurisée.")
+        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+            throw IllegalArgumentException("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
+        }
+        // Ré-authentification obligatoire avant une opération sensible.
+        com.yaarapp.app.firebase.FirebaseModule.reauthenticateWithPassword(user.whatsappNumber, password)
+        // Supprimer d'abord les données cloud, puis l'identité Firebase.
+        firestoreSync.deleteAccountData(uid)
+        productDao.deleteAllForOwnerId(user.id)
+        interestDao.deleteAllForUser(user.id)
+        adCampaignDao.deleteAllForOwner(user.id)
+        cartDao.clear(user.id)
+        shopDao.deleteAllForOwner(user.id)
+        userDao.deleteById(user.id)
+        session.clearSession()
+        com.yaarapp.app.firebase.FirebaseModule.deleteCurrentAuthUser()
+    }
+
+    suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) =
+        firestoreSync.sendChatMessage(product, shop, buyer, text)
+
+    fun observeChatMessages(conversationId: String): Flow<List<ChatMessage>> =
+        firestoreSync.observeChatMessages(conversationId)
+
+    fun conversationId(product: Product, shop: Shop, buyer: User): String =
+        firestoreSync.conversationId(product, shop, buyer)
+
     suspend fun getUser(id: Int): User? = userDao.findById(id)
 
     suspend fun restoreAccount(user: User): User = firestoreSync.restoreAccount(user)
@@ -216,8 +245,16 @@ class YaarRepository(context: Context) {
                 shopRemoteId = shop.remoteId
             )
         )
-        productDao.getById(id.toInt())?.let { firestoreSync.syncProduct(it) }
-        return AddProductResult.Success
+        val created = productDao.getById(id.toInt()) ?: return AddProductResult.Error("Impossible de préparer le produit.")
+        return try {
+            // La publication n'est confirmée qu'après l'envoi de la photo et du produit
+            // vers Firebase. Cela empêche qu'un chemin local inaccessible aux autres
+            // téléphones soit enregistré comme image distante.
+            firestoreSync.syncProductNow(created)
+            AddProductResult.Success
+        } catch (e: Exception) {
+            AddProductResult.Error(e.message ?: "Impossible de publier le produit sur Firebase.")
+        }
     }
 
     suspend fun deleteProduct(product: Product) {
@@ -318,14 +355,18 @@ class YaarRepository(context: Context) {
     // ---------- Certification de boutique ----------
 
     suspend fun requestShopCertification(shop: Shop, idCardFrontUrl: String, idCardBackUrl: String) {
-        shopDao.update(
-            shop.copy(
-                certificationStatus = CertificationStatus.PENDING,
-                idCardFrontUrl = idCardFrontUrl,
-                idCardBackUrl = idCardBackUrl,
-                certificationRequestedAt = System.currentTimeMillis()
-            )
+        val paidAt = System.currentTimeMillis()
+        val expiresAt = paidAt + CertificationConfig.VALIDITY_DAYS * 24L * 60L * 60L * 1000L
+        val updated = shop.copy(
+            certificationStatus = CertificationStatus.PENDING,
+            idCardFrontUrl = idCardFrontUrl,
+            idCardBackUrl = idCardBackUrl,
+            certificationRequestedAt = paidAt,
+            certificationPaidAt = paidAt,
+            certificationExpiresAt = expiresAt
         )
+        shopDao.update(updated)
+        firestoreSync.syncShopNow(updated)
     }
 
     // ---------- Marketplace ("Acheter") ----------

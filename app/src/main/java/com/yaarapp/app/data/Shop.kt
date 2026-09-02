@@ -34,6 +34,10 @@ data class Shop(
     val idCardFrontUrl: String? = null,
     val idCardBackUrl: String? = null,
     val certificationRequestedAt: Long? = null,
+    /** Date du dernier paiement de certification. */
+    val certificationPaidAt: Long? = null,
+    /** Fin de la période mensuelle payée (30 jours). */
+    val certificationExpiresAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     /**
      * Identifiant du document Firestore correspondant (auto-généré par Firestore,

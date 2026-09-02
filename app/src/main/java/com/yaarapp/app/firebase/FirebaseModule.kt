@@ -69,6 +69,17 @@ object FirebaseModule {
         return result.user?.uid ?: error("Firebase n'a pas retourné l'identifiant du compte.")
     }
 
+    suspend fun reauthenticateWithPassword(whatsappNumber: String, password: String) {
+        require(isValidPassword(password)) { "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement." }
+        val user = auth.currentUser ?: throw IllegalStateException("Compte Firebase introuvable.")
+        val credential = EmailAuthProvider.getCredential(authEmailForWhatsapp(whatsappNumber), password)
+        user.reauthenticate(credential).await()
+    }
+
+    suspend fun deleteCurrentAuthUser() {
+        auth.currentUser?.delete()?.await() ?: throw IllegalStateException("Compte Firebase introuvable.")
+    }
+
     suspend fun signOut() { auth.signOut() }
 
     suspend fun signInAnonymouslyUser(): String {

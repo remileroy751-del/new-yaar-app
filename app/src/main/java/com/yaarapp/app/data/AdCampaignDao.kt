@@ -21,4 +21,7 @@ interface AdCampaignDao {
 
     @Update
     suspend fun update(campaign: AdCampaign)
+
+    @Query("DELETE FROM ad_campaigns WHERE shopId IN (SELECT id FROM shops WHERE ownerId = :ownerId)")
+    suspend fun deleteAllForOwner(ownerId: Int)
 }

@@ -55,6 +55,12 @@ interface ProductDao {
     @Insert
     suspend fun insertAll(products: List<Product>)
 
+    @Query("DELETE FROM products WHERE ownerUid = :ownerUid")
+    suspend fun deleteAllForOwnerUid(ownerUid: String)
+
+    @Query("DELETE FROM products WHERE shopId IN (SELECT id FROM shops WHERE ownerId = :ownerId)")
+    suspend fun deleteAllForOwnerId(ownerId: Int)
+
     @Query("SELECT COUNT(*) FROM products")
     suspend fun count(): Int
 

@@ -35,6 +35,12 @@ interface ShopDao {
     @Update
     suspend fun update(shop: Shop)
 
+    @Query("DELETE FROM shops WHERE ownerId = :ownerId")
+    suspend fun deleteAllForOwner(ownerId: Int)
+
+    @Query("SELECT id FROM shops WHERE ownerId = :ownerId")
+    suspend fun idsForOwner(ownerId: Int): List<Int>
+
     @Query("SELECT COUNT(*) FROM shops")
     suspend fun count(): Int
 }

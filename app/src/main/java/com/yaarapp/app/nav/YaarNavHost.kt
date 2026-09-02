@@ -3,6 +3,9 @@ package com.yaarapp.app.nav
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -17,6 +20,7 @@ import androidx.navigation.navArgument
 import com.yaarapp.app.ui.components.YaarBottomBar
 import com.yaarapp.app.ui.screens.AddProductScreen
 import com.yaarapp.app.ui.screens.CartScreen
+import com.yaarapp.app.ui.screens.ChatScreen
 import com.yaarapp.app.ui.screens.CertifyShopScreen
 import com.yaarapp.app.ui.screens.ConfigureAdCampaignScreen
 import com.yaarapp.app.ui.screens.KkiapayCheckoutScreen
@@ -35,6 +39,7 @@ import com.yaarapp.app.ui.screens.SelectProductToPromoteScreen
 import com.yaarapp.app.ui.screens.ShopPublicScreen
 import com.yaarapp.app.ui.screens.SignUpScreen
 import com.yaarapp.app.ui.screens.SplashScreen
+import com.yaarapp.app.ui.screens.TermsAndConditionsScreen
 import com.yaarapp.app.viewmodel.YaarViewModel
 import com.yaarapp.app.viewmodel.YaarViewModelFactory
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +52,7 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val cartItemCount by viewModel.cartItemCount.collectAsState()
+    val termsAccepted by viewModel.termsAccepted.collectAsStateWithLifecycle()
 
     val mainTabs = listOf(Routes.PROFILE, Routes.MY_SHOP, Routes.MARKETPLACE)
     val showBottomBar = currentRoute in mainTabs
@@ -60,15 +66,35 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
             NavHost(navController = navController, startDestination = Routes.SPLASH) {
                 composable(Routes.SPLASH) {
                     SplashScreen(onFinished = {
-                        val destination = when {
-                            viewModel.currentUser.value?.firebaseUid == null && viewModel.currentUser.value != null -> Routes.SECURE_ACCOUNT
-                            viewModel.currentUserId.value != null -> Routes.MARKETPLACE
-                            else -> Routes.LOGIN
+                        val destination = if (!termsAccepted) {
+                            Routes.TERMS
+                        } else {
+                            when {
+                                viewModel.currentUser.value?.firebaseUid == null && viewModel.currentUser.value != null -> Routes.SECURE_ACCOUNT
+                                viewModel.currentUserId.value != null -> Routes.MARKETPLACE
+                                else -> Routes.LOGIN
+                            }
                         }
                         navController.navigate(destination) {
                             popUpTo(Routes.SPLASH) { inclusive = true }
                         }
                     })
+                }
+
+                composable(Routes.TERMS) {
+                    TermsAndConditionsScreen(
+                        viewModel = viewModel,
+                        onAccepted = {
+                            val destination = when {
+                                viewModel.currentUser.value?.firebaseUid == null && viewModel.currentUser.value != null -> Routes.SECURE_ACCOUNT
+                                viewModel.currentUserId.value != null -> Routes.MARKETPLACE
+                                else -> Routes.LOGIN
+                            }
+                            navController.navigate(destination) {
+                                popUpTo(Routes.TERMS) { inclusive = true }
+                            }
+                        }
+                    )
                 }
 
                 composable(Routes.LOGIN) {
@@ -141,8 +167,22 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         productId = productId,
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
-                        onViewShop = { shopId -> navController.navigate(Routes.shopPublic(shopId)) }
+                        onViewShop = { shopId -> navController.navigate(Routes.shopPublic(shopId)) },
+                        onChatSupplier = { navController.navigate(Routes.chat(productId)) }
                     )
+                }
+                composable(
+                    route = Routes.CHAT,
+                    arguments = listOf(navArgument("productId") { type = NavType.IntType })
+                ) { entry ->
+                    val productId = entry.arguments?.getInt("productId") ?: 0
+                    val products by viewModel.allProducts.collectAsStateWithLifecycle()
+                    val p = products.firstOrNull { it.id == productId }
+                    var chatShop by remember(productId) { mutableStateOf<com.yaarapp.app.data.Shop?>(null) }
+                    LaunchedEffect(p?.id) { chatShop = p?.let { viewModel.getShop(it.shopId) } }
+                    if (p != null && chatShop != null) {
+                        ChatScreen(product = p, shop = chatShop!!, viewModel = viewModel, onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(
                     route = Routes.SHOP_PUBLIC,
