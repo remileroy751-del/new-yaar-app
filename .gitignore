@@ -10,6 +10,3 @@
 *.apk
 *.aab
 
-# Firebase : google-services.json est une configuration cliente Android.
-# Il peut être versionné dans ce projet pour permettre une compilation GitHub directe.
-# Alternative : fournir son contenu via le secret GOOGLE_SERVICES_JSON dans GitHub Actions.

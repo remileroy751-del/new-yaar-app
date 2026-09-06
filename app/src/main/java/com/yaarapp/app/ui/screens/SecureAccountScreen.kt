@@ -31,7 +31,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.yaarapp.app.firebase.FirebaseModule
 import com.yaarapp.app.viewmodel.YaarViewModel
 
 /** Écran affiché une seule fois aux comptes créés avec l'ancienne version anonyme. */
@@ -51,6 +50,6 @@ fun SecureAccountScreen(viewModel: YaarViewModel, onDone: () -> Unit) {
         OutlinedTextField(value = password, onValueChange = { if (it.length <= 6 && it.all(Char::isLetterOrDigit)) password = it }, label = { Text("Nouveau mot de passe") }, singleLine = true, visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
         OutlinedTextField(value = confirmation, onValueChange = { if (it.length <= 6 && it.all(Char::isLetterOrDigit)) confirmation = it }, label = { Text("Confirmer") }, singleLine = true, visualTransformation = if (confirmationVisible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton(onClick = { confirmationVisible = !confirmationVisible }) { Icon(if (confirmationVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null) } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
         if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
-        Button(onClick = { viewModel.secureLegacyAccount(password) { onDone() } }, enabled = password.length == 6 && password == confirmation && FirebaseModule.isValidPassword(password), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Sécuriser mon compte") }
+        Button(onClick = { viewModel.secureLegacyAccount(password) { onDone() } }, enabled = password.length == 6 && password == confirmation && password.matches(Regex("^[A-Za-z0-9]{6}$")), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Sécuriser mon compte") }
     }
 }

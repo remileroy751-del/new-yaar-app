@@ -106,14 +106,14 @@ tant que vous ne désinstallez pas l'application (une simple mise à jour de l'A
 vide pas les données déjà enregistrées). Pour repartir d'une base 100 % vide,
 désinstallez puis réinstallez l'application.
 
-## 🟢 Synchronisation en ligne (Firebase)
+## 🟢 Synchronisation en ligne (Supabase)
 
 **Les boutiques et les produits sont désormais partagés entre tous les téléphones**
-via Firebase Firestore + Storage — un produit publié depuis un appareil apparaît dans
+via Supabase PostgreSQL + Storage — un produit publié depuis un appareil apparaît dans
 "Acheter" sur tous les autres. Les comptes utilisateurs, le panier, les notifications
 "intéressé" et les campagnes publicitaires restent pour l'instant locaux à chaque
 appareil (prochain lot). Détails complets, état précis collection par collection, et
-marche à suivre pour la config Firebase (Firestore, Storage, Authentication) :
+marche à suivre pour la config Supabase (PostgreSQL, Storage, Authentication) :
 **[`BACKEND_FIREBASE.md`](./BACKEND_FIREBASE.md)**.
 
 ## ⚠️ Limitation importante à connaître avant la mise en production
@@ -154,12 +154,12 @@ sera pas fonctionnel (mode démonstration).
 
 Pour une vraie plateforme où les boutiques créées par un vendeur sont visibles par tous
 les acheteurs sur tous les téléphones, il faut brancher un **backend partagé** — la
-piste la plus rapide est **Firebase** (Firebase Authentication pour les comptes,
-Firestore pour les boutiques/produits, Firebase Storage pour les photos). La couche
+piste la plus rapide est **Supabase** (Supabase Authentication pour les comptes,
+PostgreSQL pour les boutiques/produits, Supabase Storage pour les photos). La couche
 `data/YaarRepository.kt` a été conçue pour isoler cette logique : c'est le seul fichier
 à réécrire pour brancher un vrai backend, sans toucher aux écrans.
 **Voir le guide détaillé étape par étape : [`BACKEND_FIREBASE.md`](./BACKEND_FIREBASE.md)**
-(création du projet Firebase, dépendances Gradle, règles de sécurité, requêtes triées
+(création du projet Supabase, dépendances Gradle, règles de sécurité, requêtes triées
 par ville...).
 
 ## 🗂 Structure du projet
@@ -167,7 +167,7 @@ par ville...).
 ```
 app/src/main/java/com/yaarapp/app/
 ├── MainActivity.kt              # Point d'entrée, héberge le NavHost Compose
-├── YaarApplication.kt           # Initialise la base de données et démarre la synchro Firebase
+├── YaarApplication.kt           # Initialise la base de données et démarre la synchro Supabase
 ├── data/
 │   ├── User.kt, Shop.kt, Product.kt, CartItem.kt, Interest.kt, AdCampaign.kt  # Modèles (entités Room)
 │   ├── Location.kt              # Enum Country (pays + drapeau + indicatif) + CityRepository
@@ -180,10 +180,10 @@ app/src/main/java/com/yaarapp/app/
 │   ├── YaarDatabase.kt          # Base Room (6 tables, version 6)
 │   ├── YaarRepository.kt        # Authentification, boutique, marketplace, panier, paiements,
 │   │                              # campagnes publicitaires, certification, notifications
-│   ├── FirestoreSync.kt         # Synchronisation Firestore/Storage (boutiques + produits)
+│   ├── PostgreSQLSync.kt         # Synchronisation PostgreSQL/Storage (boutiques + produits)
 │   └── SessionManager.kt        # Session (DataStore) — utilisateur connecté
 ├── firebase/
-│   └── FirebaseModule.kt        # Accès Firestore/Storage/Auth + connexion anonyme
+│   └── SupabaseModule.kt        # Accès PostgreSQL/Storage/Auth + connexion anonyme
 ├── nav/                         # Routes + NavHost (onboarding → auth → onglets principaux)
 ├── ui/
 │   ├── components/               # ProductCard, barre de navigation du bas, filtres
@@ -253,21 +253,21 @@ debug et le publie en tant qu'artefact téléchargeable.
 - `compileSdk` / `targetSdk` 34, `minSdk` 24 (Android 7.0+)
 - Kotlin 2.3.21 (KSP 2.3.11), AGP 8.13.2, Jetpack Compose (BOM 2024.06.00, compilateur
   piloté par le plugin `org.jetbrains.kotlin.plugin.compose`), Material 3, Navigation
-  Compose, Room 2.8.4, DataStore Preferences, Coil, Firebase (BoM 34.18.0)
+  Compose, Room 2.8.4, DataStore Preferences, Coil, Supabase (BoM 34.18.0)
 - Le choix de photo utilise le **sélecteur de photos système** (Photo Picker), qui ne
   nécessite aucune permission de stockage sur Android récent.
 
 ## 🚀 Prochaines étapes suggérées
 
-- Étendre la synchronisation Firebase aux comptes, au panier, aux campagnes
+- Étendre la synchronisation Supabase aux comptes, au panier, aux campagnes
   publicitaires (+ Cloud Function de comptage partagé) et aux notifications
   "intéressé" (+ notification push) — guide complet dans `BACKEND_FIREBASE.md`.
 - Passer de l'authentification anonyme à la connexion par numéro de téléphone
-  (Firebase Auth) pour des règles de sécurité plus strictes par propriétaire.
+  (Supabase Auth) pour des règles de sécurité plus strictes par propriétaire.
 - Renseigner la clé publique Kkiapay (`util/KkiapayConfig.kt`) pour activer les
   paiements réels (capacité produits, campagnes publicitaires, certification).
 - Ajouter une interface d'administration pour étudier les dossiers de certification
-  (aujourd'hui : vérification manuelle dans Firestore, voir `BACKEND_FIREBASE.md`).
+  (aujourd'hui : vérification manuelle dans PostgreSQL, voir `BACKEND_FIREBASE.md`).
 - Publier l'application sur le Google Play Store (nécessite un compte développeur
   Google Play).
 
@@ -277,4 +277,8 @@ reprises de vos échanges et des fichiers fournis.
 
 
 ## V1.2.1
-Voir `UPDATE_1_2_1.md` : boutons du profil renforcés, suppression Firebase approfondie et synchronisation robuste des photos produits via Firebase Storage.
+Voir `UPDATE_1_2_1.md` : boutons du profil renforcés, suppression Supabase approfondie et synchronisation robuste des photos produits via Supabase Storage.
+
+## Backend final — Supabase
+
+Cette version utilise exclusivement Supabase. Voir `SUPABASE_SETUP.md` et `Yaar-App-Supabase-Final-Setup.sql`.

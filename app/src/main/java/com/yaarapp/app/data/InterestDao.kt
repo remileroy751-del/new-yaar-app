@@ -14,6 +14,9 @@ interface InterestDao {
     @Query("SELECT COUNT(*) FROM interests WHERE shopOwnerId = :ownerId AND isRead = 0")
     fun observeUnreadCount(ownerId: Int): Flow<Int>
 
+    @Query("SELECT * FROM interests WHERE productId = :productId AND buyerId = :buyerId AND ABS(createdAt - :createdAt) < 10000 LIMIT 1")
+    suspend fun findLatest(productId: Int, buyerId: Int, createdAt: Long): Interest?
+
     @Insert
     suspend fun insert(interest: Interest): Long
 

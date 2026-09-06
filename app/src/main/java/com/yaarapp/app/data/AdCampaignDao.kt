@@ -19,6 +19,9 @@ interface AdCampaignDao {
     @Insert
     suspend fun insert(campaign: AdCampaign): Long
 
+    @Query("SELECT * FROM ad_campaigns WHERE productId = :productId AND startedAt = :startedAt LIMIT 1")
+    suspend fun findByProductAndStartedAt(productId: Int, startedAt: Long): AdCampaign?
+
     @Update
     suspend fun update(campaign: AdCampaign)
 

@@ -39,7 +39,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.yaarapp.app.firebase.FirebaseModule
 import com.yaarapp.app.viewmodel.YaarViewModel
 
 /** Étape 2 puis étape 3 du parcours d'inscription. */
@@ -141,7 +140,7 @@ fun SignUpScreen(
                     if (password != confirmation) return@Button
                     viewModel.signUp(firstName.trim(), localWhatsapp.trim(), password) { onSignedUp() }
                 },
-                enabled = password.length == 6 && confirmation == password && FirebaseModule.isValidPassword(password),
+                enabled = password.length == 6 && confirmation == password && password.matches(Regex("^[A-Za-z0-9]{6}$")),
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)
             ) { Text("Créer mon compte") }
             TextButton(onClick = { step = 2 }) { Text("Retour") }

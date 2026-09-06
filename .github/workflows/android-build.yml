@@ -25,47 +25,11 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Restore Firebase configuration
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: |
-          # Si un secret est configuré, il est prioritaire. Sinon, le fichier peut
-          # être versionné dans app/google-services.json (Firebase client config).
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-            echo "google-services.json restauré depuis le secret GitHub."
-          fi
-
-          if [ ! -s app/google-services.json ]; then
-            echo "ERREUR: app/google-services.json est absent."
-            echo "Ajoutez ce fichier au dépôt OU créez le secret GitHub Actions GOOGLE_SERVICES_JSON."
-            exit 1
-          fi
-
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          p = Path("app/google-services.json")
-          data = json.loads(p.read_text())
-          clients = data.get("client", [])
-          package_names = [
-              c.get("client_info", {}).get("android_client_info", {}).get("package_name")
-              for c in clients
-          ]
-          if "com.yaarapp.app" not in package_names:
-              raise SystemExit(
-                  "ERREUR: google-services.json ne contient pas la configuration Android "
-                  "pour com.yaarapp.app."
-              )
-          print("Configuration Firebase valide pour com.yaarapp.app.")
-          PY
-
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Run unit tests and build debug APK
+        run: gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: yaar-app-debug
           path: app/build/outputs/apk/debug/*.apk
-

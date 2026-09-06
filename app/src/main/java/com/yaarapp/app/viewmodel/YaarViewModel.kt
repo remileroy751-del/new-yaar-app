@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -58,12 +59,12 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     }
 
     /** Les anciens comptes de la version précédente doivent définir un mot de passe une seule fois. */
-    val needsAccountUpgrade: StateFlow<Boolean> = _currentUser
-        .map { it != null && it.firebaseUid == null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val needsAccountUpgrade: StateFlow<Boolean> = flowOf(false)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init {
         viewModelScope.launch {
+            repository.synchronizeSession()
             currentUserId.collect { id ->
                 val local = if (id != null) repository.getUser(id) else null
                 _currentUser.value = local
@@ -121,7 +122,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
             _authError.value = "Le numéro WhatsApp saisi semble incomplet."
             return
         }
-        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
+        if (!repository.isValidPassword(password)) {
             _authError.value = "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement."
             return
         }
@@ -156,7 +157,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
-    /** Connexion par numéro WhatsApp + mot de passe Firebase. */
+    /** Connexion par numéro WhatsApp + mot de passe Supabase. */
     fun login(whatsappNumber: String, password: String, onDone: () -> Unit) {
         viewModelScope.launch {
             when (val result = repository.login(whatsappNumber, password)) {
@@ -268,7 +269,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     // ---------- Ma boutique ----------
 
     /**
-     * Dernier évènement de synchronisation Firebase (succès ✅ ou échec ❌), affiché en
+     * Dernier évènement de synchronisation Supabase (succès ✅ ou échec ❌), affiché en
      * bannière dans "Ma boutique" — permet de diagnostiquer sans outil externe.
      */
     val lastSyncEvent: StateFlow<String?> = repository.lastSyncEvent

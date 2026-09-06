@@ -8,7 +8,7 @@ data class Shop(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val ownerId: Int,
-    /** UID Firebase du propriétaire, stable entre téléphones. */
+    /** UID Supabase du propriétaire, stable entre téléphones. */
     val ownerUid: String? = null,
     val name: String,
     val whatsappNumber: String,
@@ -40,7 +40,7 @@ data class Shop(
     val certificationExpiresAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     /**
-     * Identifiant du document Firestore correspondant (auto-généré par Firestore,
+     * Identifiant du document Supabase correspondant (auto-généré par Supabase,
      * globalement unique) une fois cette boutique synchronisée en ligne. `null` tant
      * que la synchronisation n'a pas encore eu lieu (ex. pas de réseau) — l'app reste
      * pleinement fonctionnelle en local dans ce cas, la synchro réessaiera plus tard.

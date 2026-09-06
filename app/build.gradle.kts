@@ -5,20 +5,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
     // Compilateur Compose (Kotlin 2.0+) — remplace composeOptions.kotlinCompilerExtensionVersion.
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
 
-// Yaar-App est une marketplace en ligne : Firebase est donc obligatoire pour la
-// version distribuée. Le plugin Google Services doit traiter app/google-services.json
-// pendant chaque compilation afin de générer les ressources Firebase utilisées par
-// FirebaseApp.initializeApp(). Si le fichier manque, on préfère faire échouer la
-// compilation plutôt que produire un APK qui fonctionne seulement en local.
-val firebaseConfig = file("google-services.json")
-check(firebaseConfig.exists()) {
-    "google-services.json est introuvable dans app/. " +
-        "Ajoutez le fichier Firebase ou configurez le secret GitHub Actions GOOGLE_SERVICES_JSON."
-}
-apply(plugin = "com.google.gms.google-services")
+// Yaar-App utilise désormais exclusivement Supabase pour Auth, PostgreSQL et Storage.
 
 android {
     namespace = "com.yaarapp.app"
@@ -28,7 +19,7 @@ android {
         applicationId = "com.yaarapp.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
+        versionCode = 14
         versionName = "1.2.1"
 
         vectorDrawables {
@@ -53,6 +44,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     // NOTE : "kotlinOptions { jvmTarget = ... }" est supprimé depuis Kotlin 2.2 (pas
     // seulement déprécié) — le réglage équivalent se fait maintenant via le bloc
@@ -109,18 +101,16 @@ dependencies {
     // DataStore for simple prefs (onboarding flag, delivery zone, etc.)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Firebase — configuration obligatoire pour la version en ligne.
-    // Le BOM gère les versions compatibles entre les modules Firebase automatiquement.
-    // Depuis le BoM 34.0.0 (juillet 2025), Firebase a retiré les modules "-ktx" séparés :
-    // les API Kotlin (ex. Firebase.firestore) sont désormais directement dans les modules
-    // principaux ci-dessous — ne PAS ajouter de suffixe "-ktx", ça ne compilerait plus.
-    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-messaging")
-    // Permet d'utiliser .await() sur les Task Firebase depuis des coroutines Kotlin.
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    // Supabase — Auth, PostgreSQL, Storage et Realtime.
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.6.0"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:storage-kt")
+    implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation("io.ktor:ktor-client-android:3.4.3")
+    implementation("io.ktor:ktor-client-core:3.4.3")
+    implementation("io.ktor:ktor-utils:3.4.3")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

@@ -16,8 +16,8 @@ enum class InterestStatus(val label: String) {
  * WhatsApp (son numéro est déjà connu puisque tout le monde s'inscrit avec son WhatsApp).
  *
  * Pour l'instant, cette notification est uniquement stockée en local et visible dans
- * l'onglet "Ma boutique" (icône cloche). Une fois le backend Firebase branché, la création
- * d'une ligne ici déclenchera aussi une notification push (Firebase Cloud Messaging) vers
+ * l'onglet "Ma boutique" (icône cloche). Une fois le backend Supabase branché, la création
+ * d'une ligne ici déclenchera aussi une notification push (Supabase Notifications) vers
  * le téléphone du vendeur, à condition que son compte ait activé les notifications
  * (voir User.notificationsEnabled, réglable dans "Mon profil").
  */

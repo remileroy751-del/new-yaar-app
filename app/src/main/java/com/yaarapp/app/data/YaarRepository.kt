@@ -2,6 +2,7 @@ package com.yaarapp.app.data
 
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 sealed class AuthResult {
     data class Success(val user: User) : AuthResult()
@@ -25,20 +26,34 @@ class YaarRepository(context: Context) {
     private val interestDao = db.interestDao()
     private val adCampaignDao = db.adCampaignDao()
 
-    /** Synchronisation Firestore/Storage — voir FirestoreSync.kt pour le détail du fonctionnement. */
-    private val firestoreSync = FirestoreSync(context, db)
+    /** Synchronisation Supabase Database/Storage — voir SupabaseSync.kt pour le détail du fonctionnement. */
+    private val supabaseSync = SupabaseSync(context, db)
 
     val session = SessionManager(context)
 
     /** À appeler une fois au démarrage de l'app (voir YaarApplication.onCreate). */
-    fun startRemoteSync() = firestoreSync.startRemoteSync()
+    fun startRemoteSync() = supabaseSync.startRemoteSync()
 
-    /** Dernier évènement de synchronisation Firebase, en clair (pour affichage direct dans l'app). */
-    val lastSyncEvent get() = firestoreSync.lastSyncEvent
+    suspend fun synchronizeSession() {
+        val uid = supabaseSync.currentUid()
+        if (uid == null) {
+            session.clearSession()
+            return
+        }
+        val localId = session.currentUser.firstOrNull()
+        if (localId != null) {
+            getUser(localId)?.let { userDao.update(it.copy(firebaseUid = uid)) }
+        }
+    }
 
-    fun clearLastSyncEvent() = firestoreSync.clearLastSyncEvent()
+    fun isValidPassword(password: String): Boolean = supabaseSync.isValidPassword(password)
 
-    // ---------- Authentification Firebase ----------
+    /** Dernier évènement de synchronisation Supabase, en clair (pour affichage direct dans l'app). */
+    val lastSyncEvent get() = supabaseSync.lastSyncEvent
+
+    fun clearLastSyncEvent() = supabaseSync.clearLastSyncEvent()
+
+    // ---------- Authentification Supabase ----------
 
     suspend fun signUp(
         firstName: String,
@@ -47,41 +62,33 @@ class YaarRepository(context: Context) {
         whatsappNumber: String,
         password: String
     ): AuthResult {
-        val canonicalWhatsapp = com.yaarapp.app.firebase.FirebaseModule.normalizeWhatsapp(whatsappNumber)
+        val canonicalWhatsapp = supabaseSync.normalizeWhatsapp(whatsappNumber)
         if (firstName.isBlank() || city.isBlank()) return AuthResult.Error("Merci de renseigner votre nom complet.")
         if (canonicalWhatsapp.length < 10) return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
-        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
-            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        }
-        if (userDao.findByWhatsapp(canonicalWhatsapp) != null) {
-            return AuthResult.Error("Un compte existe déjà avec ce numéro WhatsApp. Connectez-vous avec votre mot de passe.")
-        }
-
+        if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
+        if (userDao.findByWhatsapp(canonicalWhatsapp) != null) return AuthResult.Error("Un compte local existe déjà avec ce numéro WhatsApp. Connectez-vous avec votre mot de passe.")
         return try {
-            val uid = com.yaarapp.app.firebase.FirebaseModule.createEmailPasswordAccount(canonicalWhatsapp, password)
-            val user = User(
-                firstName = firstName, country = country, city = city,
-                whatsappNumber = canonicalWhatsapp, firebaseUid = uid
-            )
-            val id = userDao.insert(user).toInt()
-            val created = user.copy(id = id)
+            val created = supabaseSync.createAccount(canonicalWhatsapp, password, firstName, country, city)
+            val id = userDao.insert(created).toInt()
+            val local = created.copy(id = id)
             session.setCurrentUser(id)
-            firestoreSync.syncUser(created)
-            AuthResult.Success(created)
+            supabaseSync.syncUserNow(local)
+            AuthResult.Success(local)
         } catch (e: Exception) {
             AuthResult.Error(authErrorMessage(e))
         }
     }
 
     suspend fun secureLegacyAccount(user: User, password: String): AuthResult {
-        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
-            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        }
+        // Les anciennes données Firebase ne sont pas migrées. Ce chemin sert uniquement
+        // à permettre à une installation ayant encore un utilisateur local de créer son
+        // nouveau compte Supabase avec le même numéro et les mêmes données de profil.
+        if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         return try {
-            val uid = com.yaarapp.app.firebase.FirebaseModule.linkAnonymousAccount(user.whatsappNumber, password)
-            val upgraded = user.copy(firebaseUid = uid)
+            val created = supabaseSync.createAccount(user.whatsappNumber, password, user.firstName, user.country, user.city)
+            val upgraded = user.copy(firebaseUid = created.firebaseUid)
             userDao.update(upgraded)
-            firestoreSync.migrateLegacyAccount(upgraded)
+            supabaseSync.syncUserNow(upgraded)
             AuthResult.Success(upgraded)
         } catch (e: Exception) {
             AuthResult.Error(authErrorMessage(e))
@@ -89,21 +96,15 @@ class YaarRepository(context: Context) {
     }
 
     suspend fun login(whatsappNumber: String, password: String): AuthResult {
-        val canonicalWhatsapp = com.yaarapp.app.firebase.FirebaseModule.normalizeWhatsapp(whatsappNumber)
-        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
-            return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        }
+        val canonicalWhatsapp = supabaseSync.normalizeWhatsapp(whatsappNumber)
+        if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         return try {
-            val uid = com.yaarapp.app.firebase.FirebaseModule.signInWithWhatsappPassword(canonicalWhatsapp, password)
+            val uid = supabaseSync.signIn(canonicalWhatsapp, password)
             var user = userDao.findByWhatsapp(canonicalWhatsapp)
-            if (user == null) {
-                user = firestoreSync.createLocalUserFromCloud(uid, canonicalWhatsapp)
-            } else if (user.firebaseUid != uid) {
-                user = user.copy(firebaseUid = uid).also { userDao.update(it) }
-            }
-            if (user == null) return AuthResult.Error("Compte introuvable dans les données Yaar-App.")
-
-            user = firestoreSync.restoreAccount(user)
+            if (user == null) user = supabaseSync.createLocalUserFromCloud(uid, canonicalWhatsapp)
+            if (user == null) return AuthResult.Error("Compte introuvable dans Yaar-App. Créez d'abord votre compte.")
+            user = user.copy(firebaseUid = uid).also { userDao.update(it) }
+            user = supabaseSync.restoreAccount(user)
             session.setCurrentUser(user.id)
             AuthResult.Success(user)
         } catch (e: Exception) {
@@ -112,32 +113,28 @@ class YaarRepository(context: Context) {
     }
 
     private fun authErrorMessage(e: Exception): String {
-        val authCode = (e as? com.google.firebase.auth.FirebaseAuthException)?.errorCode.orEmpty().lowercase()
-        val message = e.message.orEmpty().lowercase()
+        val message = e.message.orEmpty()
+        val lower = message.lowercase()
         return when {
-            authCode.contains("invalid-credential") || authCode.contains("wrong-password") || authCode.contains("invalid-login-credentials") -> "Numéro WhatsApp ou mot de passe incorrect."
-            authCode.contains("user-not-found") -> "Aucun compte trouvé avec ce numéro WhatsApp."
-            authCode.contains("email-already-in-use") || message.contains("credential is already associated") -> "Ce numéro WhatsApp est déjà associé à un autre compte Firebase."
-            authCode.contains("requires-recent-login") -> "Reconnectez-vous puis réessayez."
-            else -> e.message ?: "Une erreur Firebase est survenue. Vérifiez votre connexion Internet."
+            lower.contains("invalid login credentials") || lower.contains("invalid_credentials") || lower.contains("invalid credentials") -> "Numéro WhatsApp ou mot de passe incorrect."
+            lower.contains("user already registered") || lower.contains("already registered") -> "Ce numéro WhatsApp possède déjà un compte Supabase."
+            lower.contains("email not confirmed") -> "La confirmation par e-mail doit être désactivée dans Supabase pour Yaar-App."
+            lower.contains("network") || lower.contains("unable to resolve") || lower.contains("timeout") -> "Connexion Internet impossible. Vérifiez votre réseau puis réessayez."
+            else -> message.ifBlank { "Une erreur Supabase est survenue. Vérifiez votre connexion Internet." }
         }
     }
 
     suspend fun logout() {
         session.clearSession()
-        runCatching { com.yaarapp.app.firebase.FirebaseModule.signOut() }
+        runCatching { supabaseSync.signOut() }
     }
 
-    /** Supprime définitivement le compte Firebase, toutes ses données cloud et ses données locales. */
+    /** Supprime définitivement le compte Supabase, ses données cloud, ses fichiers et ses données locales. */
     suspend fun deleteAccount(user: User, password: String) {
-        val uid = user.firebaseUid ?: throw IllegalStateException("Ce compte ne possède pas encore de connexion sécurisée.")
-        if (!com.yaarapp.app.firebase.FirebaseModule.isValidPassword(password)) {
-            throw IllegalArgumentException("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        }
-        // Ré-authentification obligatoire avant une opération sensible.
-        com.yaarapp.app.firebase.FirebaseModule.reauthenticateWithPassword(user.whatsappNumber, password)
-        // Supprimer d'abord les données cloud, puis l'identité Firebase.
-        firestoreSync.deleteAccountData(uid)
+        val uid = user.firebaseUid ?: throw IllegalStateException("Session Supabase introuvable.")
+        if (!supabaseSync.isValidPassword(password)) throw IllegalArgumentException("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
+        supabaseSync.verifyPassword(user.whatsappNumber, password)
+        supabaseSync.deleteAccountData(uid)
         productDao.deleteAllForOwnerId(user.id)
         interestDao.deleteAllForUser(user.id)
         adCampaignDao.deleteAllForOwner(user.id)
@@ -145,26 +142,26 @@ class YaarRepository(context: Context) {
         shopDao.deleteAllForOwner(user.id)
         userDao.deleteById(user.id)
         session.clearSession()
-        com.yaarapp.app.firebase.FirebaseModule.deleteCurrentAuthUser()
+        supabaseSync.deleteCurrentAccount()
     }
 
     suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) =
-        firestoreSync.sendChatMessage(product, shop, buyer, text)
+        supabaseSync.sendChatMessage(product, shop, buyer, text)
 
     fun observeChatMessages(conversationId: String): Flow<List<ChatMessage>> =
-        firestoreSync.observeChatMessages(conversationId)
+        supabaseSync.observeChatMessages(conversationId)
 
     fun conversationId(product: Product, shop: Shop, buyer: User): String =
-        firestoreSync.conversationId(product, shop, buyer)
+        supabaseSync.conversationId(product, shop, buyer)
 
     suspend fun getUser(id: Int): User? = userDao.findById(id)
 
-    suspend fun restoreAccount(user: User): User = firestoreSync.restoreAccount(user)
+    suspend fun restoreAccount(user: User): User = supabaseSync.restoreAccount(user)
 
     suspend fun setNotificationsEnabled(user: User, enabled: Boolean): User {
         val updated = user.copy(notificationsEnabled = enabled)
         userDao.update(updated)
-        firestoreSync.syncUser(updated)
+        supabaseSync.syncUser(updated)
         return updated
     }
 
@@ -195,7 +192,7 @@ class YaarRepository(context: Context) {
         val id = shopDao.insert(shop)
         val created = shop.copy(id = id.toInt())
         return try {
-            firestoreSync.syncShopNow(created)
+            supabaseSync.syncShopNow(created)
         } catch (_: Exception) {
             // La boutique reste disponible localement si le réseau est indisponible.
             created
@@ -210,7 +207,7 @@ class YaarRepository(context: Context) {
         if (shop.extraProductSlots > 0) return
         val updated = shop.copy(extraProductSlots = ShopLimits.EXTRA_PACK_PRODUCTS)
         shopDao.update(updated)
-        firestoreSync.syncShop(updated)
+        supabaseSync.syncShop(updated)
     }
 
     fun observeShopProducts(shopId: Int): Flow<List<Product>> = productDao.observeByShop(shopId)
@@ -250,25 +247,25 @@ class YaarRepository(context: Context) {
         val created = productDao.getById(id.toInt()) ?: return AddProductResult.Error("Impossible de préparer le produit.")
         return try {
             // La publication n'est confirmée qu'après l'envoi de la photo et du produit
-            // vers Firebase. Cela empêche qu'un chemin local inaccessible aux autres
+            // vers Supabase. Cela empêche qu'un chemin local inaccessible aux autres
             // téléphones soit enregistré comme image distante.
-            firestoreSync.syncProductNow(created)
+            supabaseSync.syncProductNow(created)
             AddProductResult.Success
         } catch (e: Exception) {
-            AddProductResult.Error(e.message ?: "Impossible de publier le produit sur Firebase.")
+            AddProductResult.Error(e.message ?: "Impossible de publier le produit sur Supabase.")
         }
     }
 
     suspend fun deleteProduct(product: Product) {
         productDao.delete(product)
-        firestoreSync.deleteProductRemote(product)
+        supabaseSync.deleteProductRemote(product)
     }
 
     /** Le vendeur désactive manuellement un produit encore actif (ex : produit vendu). */
     suspend fun deactivateProduct(product: Product) {
         val updated = product.copy(isActive = false)
         productDao.update(updated)
-        firestoreSync.syncProduct(updated)
+        supabaseSync.syncProduct(updated)
     }
 
     /**
@@ -282,7 +279,7 @@ class YaarRepository(context: Context) {
         }
         val updated = product.copy(isActive = true, activatedAt = System.currentTimeMillis())
         productDao.update(updated)
-        firestoreSync.syncProduct(updated)
+        supabaseSync.syncProduct(updated)
         return AddProductResult.Success
     }
 
@@ -297,7 +294,7 @@ class YaarRepository(context: Context) {
         val cutoff = System.currentTimeMillis() - FREE_LISTING_DURATION_MS
         val expiring = productDao.getExpiredActiveForShop(shopId, cutoff)
         val count = productDao.deactivateExpired(shopId, cutoff)
-        expiring.forEach { firestoreSync.syncProduct(it.copy(isActive = false)) }
+        expiring.forEach { supabaseSync.syncProduct(it.copy(isActive = false)) }
         return count
     }
 
@@ -324,7 +321,7 @@ class YaarRepository(context: Context) {
         val id = adCampaignDao.insert(campaign)
         val promoted = product.copy(isPromoted = true)
         productDao.update(promoted)
-        firestoreSync.syncProduct(promoted)
+        supabaseSync.syncProduct(promoted)
         return campaign.copy(id = id.toInt())
     }
 
@@ -343,12 +340,16 @@ class YaarRepository(context: Context) {
         for (campaign in activeCampaigns) {
             val newRemaining = (campaign.remainingExpositions - 1).coerceAtLeast(0)
             val stillRunning = newRemaining > 0 && now < campaign.endsAt
-            adCampaignDao.update(campaign.copy(remainingExpositions = newRemaining, isActive = stillRunning))
+            val updatedCampaign = campaign.copy(remainingExpositions = newRemaining, isActive = stillRunning)
+            adCampaignDao.update(updatedCampaign)
+            val productForCampaign = productDao.getById(campaign.productId)
+            val shopForCampaign = productForCampaign?.let { shopDao.getById(it.shopId) }
+            if (productForCampaign != null && shopForCampaign != null) runCatching { supabaseSync.syncAdCampaign(updatedCampaign, productForCampaign, shopForCampaign) }
             if (!stillRunning) {
                 productDao.getById(campaign.productId)?.let { product ->
                     val updated = product.copy(isPromoted = false)
                     productDao.update(updated)
-                    firestoreSync.syncProduct(updated)
+                    supabaseSync.syncProduct(updated)
                 }
             }
         }
@@ -368,7 +369,7 @@ class YaarRepository(context: Context) {
             certificationExpiresAt = expiresAt
         )
         shopDao.update(updated)
-        firestoreSync.syncShopNow(updated)
+        supabaseSync.syncShopNow(updated)
     }
 
     // ---------- Marketplace ("Acheter") ----------
@@ -384,18 +385,13 @@ class YaarRepository(context: Context) {
     // ---------- Notifications "Je suis intéressé" ----------
 
     suspend fun expressInterest(product: Product, shop: Shop, buyer: User) {
-        interestDao.insert(
-            Interest(
-                productId = product.id,
-                productName = product.name,
-                productImageUrl = product.imageUrl,
-                shopId = shop.id,
-                shopOwnerId = shop.ownerId,
-                buyerId = buyer.id,
-                buyerFirstName = buyer.firstName,
-                buyerWhatsappNumber = buyer.whatsappNumber
-            )
+        val interest = Interest(
+            productId = product.id, productName = product.name, productImageUrl = product.imageUrl,
+            shopId = shop.id, shopOwnerId = shop.ownerId, buyerId = buyer.id,
+            buyerFirstName = buyer.firstName, buyerWhatsappNumber = buyer.whatsappNumber
         )
+        interestDao.insert(interest)
+        runCatching { supabaseSync.syncInterest(interest, product, shop) }
     }
 
     fun observeInterestsForOwner(ownerId: Int): Flow<List<Interest>> = interestDao.observeForOwner(ownerId)
@@ -403,11 +399,17 @@ class YaarRepository(context: Context) {
     fun observeUnreadInterestCount(ownerId: Int): Flow<Int> = interestDao.observeUnreadCount(ownerId)
 
     suspend fun markInterestRead(interest: Interest) {
-        if (!interest.isRead) interestDao.update(interest.copy(isRead = true))
+        if (!interest.isRead) {
+            val updated = interest.copy(isRead = true)
+            interestDao.update(updated)
+            runCatching { supabaseSync.updateInterest(updated) }
+        }
     }
 
     suspend fun setInterestStatus(interest: Interest, status: InterestStatus) {
-        interestDao.update(interest.copy(status = status, isRead = true))
+        val updated = interest.copy(status = status, isRead = true)
+        interestDao.update(updated)
+        runCatching { supabaseSync.updateInterest(updated) }
     }
 
     // ---------- Panier (par utilisateur connecté) ----------

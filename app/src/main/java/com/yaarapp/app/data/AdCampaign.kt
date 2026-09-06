@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
  * la date [endsAt] est dépassée, selon ce qui arrive en premier.
  *
  * NOTE : dans cette version locale (sans backend), une "exposition" correspond à une
- * ouverture de l'application sur CET appareil. Une fois Firebase branché, il suffira de
+ * ouverture de l'application sur CET appareil. Une fois Supabase branché, il suffira de
  * déplacer ce compteur côté serveur (Cloud Function déclenchée à chaque ouverture d'app,
  * tous utilisateurs confondus) pour un comptage réellement partagé.
  */

@@ -33,9 +33,9 @@ data class Product(
      * toujours incluse automatiquement. Le vendeur peut ajouter jusqu'à 5 villes.
      */
     val availableCities: List<String> = emptyList(),
-    /** UID Firebase du propriétaire, stable entre téléphones. */
+    /** UID Supabase du propriétaire, stable entre téléphones. */
     val ownerUid: String? = null,
-    /** Identifiant Firestore de la boutique à laquelle le produit appartient. */
+    /** Identifiant Supabase de la boutique à laquelle le produit appartient. */
     val shopRemoteId: String? = null,
     /**
      * true = produit visible par les acheteurs dans "Acheter".
@@ -58,7 +58,7 @@ data class Product(
      */
     val isPromoted: Boolean = false,
     /**
-     * Identifiant du document Firestore correspondant une fois ce produit synchronisé
+     * Identifiant du document Supabase correspondant une fois ce produit synchronisé
      * en ligne (voir [Shop.remoteId] pour le principe complet).
      */
     val remoteId: String? = null
