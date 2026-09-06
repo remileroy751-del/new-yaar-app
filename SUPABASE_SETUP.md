@@ -35,6 +35,8 @@ Les photos produits sont stockées sous `products/<uid>/<productId>.<extension>`
 
 ## 4. Compilation GitHub
 
+Le projet compile avec `compileSdk = 36`, `targetSdk = 36`, `minSdk = 24`. Le workflow installe explicitement la plateforme Android API 36.
+
 Le workflow `.github/workflows/android-build.yml` installe Gradle 8.13 et exécute :
 
 `gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon`

@@ -150,7 +150,7 @@ fun MyShopScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Synchronisation en ligne (Firebase)",
+                            "Synchronisation en ligne (Supabase)",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium
                         )
