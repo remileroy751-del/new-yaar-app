@@ -94,7 +94,7 @@ fun MyShopScreen(
     }
 
     LaunchedEffect(currentShop.id) {
-        viewModel.checkShopExpirations()
+        runCatching { viewModel.checkShopExpirations() }
     }
 
     val products by viewModel.myShopProducts.collectAsStateWithLifecycle()

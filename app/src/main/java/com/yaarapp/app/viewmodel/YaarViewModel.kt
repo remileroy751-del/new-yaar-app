@@ -534,7 +534,8 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     @OptIn(ExperimentalCoroutinesApi::class)
     val activeAdCampaigns: StateFlow<List<AdCampaign>> = myShop.flatMapLatest { shop ->
         if (shop == null) emptyFlow() else repository.observeActiveAdCampaignsForShop(shop.id)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ---------- Notifications "Je suis intéressé" (boutique) ----------
 
@@ -548,12 +549,14 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     @OptIn(ExperimentalCoroutinesApi::class)
     val myInterests: StateFlow<List<Interest>> = myShop.flatMapLatest { shop ->
         if (shop == null) emptyFlow() else repository.observeInterestsForOwner(shop.ownerId)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val unreadInterestCount: StateFlow<Int> = myShop.flatMapLatest { shop ->
         if (shop == null) flowOf(0) else repository.observeUnreadInterestCount(shop.ownerId)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    }.catch { emit(0) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun markInterestRead(interest: Interest) {
         viewModelScope.launch { repository.markInterestRead(interest) }
