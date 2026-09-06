@@ -39,6 +39,9 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     val currentUserId: StateFlow<Int?> =
         repository.session.currentUserId.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    private val _sessionReady = MutableStateFlow(false)
+    val sessionReady: StateFlow<Boolean> = _sessionReady
+
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
@@ -64,7 +67,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            repository.synchronizeSession()
+            runCatching { repository.synchronizeSession() }
+            _sessionReady.value = true
+        }
+        viewModelScope.launch {
             currentUserId.collect { id ->
                 val local = if (id != null) repository.getUser(id) else null
                 _currentUser.value = local
@@ -103,6 +109,11 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     // ---------- Authentification ----------
 
     fun isValidEmail(email: String): Boolean = repository.isValidEmail(email)
+
+    fun savedLoginEmail(): String = repository.savedLoginEmail()
+    fun rememberedLoginPassword(): String? = repository.rememberedLoginPassword()
+    fun saveLoginCredentials(email: String, password: String?, rememberPassword: Boolean) =
+        repository.saveLoginCredentials(email, password, rememberPassword)
 
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError

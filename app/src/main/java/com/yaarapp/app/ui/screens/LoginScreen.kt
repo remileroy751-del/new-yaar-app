@@ -40,8 +40,8 @@ import com.yaarapp.app.viewmodel.YaarViewModel
 
 @Composable
 fun LoginScreen(viewModel: YaarViewModel, onLoggedIn: () -> Unit, onGoToSignUp: () -> Unit) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(viewModel.savedLoginEmail()) }
+    var password by remember { mutableStateOf(viewModel.rememberedLoginPassword().orEmpty()) }
     var visible by remember { mutableStateOf(false) }
     val error by viewModel.authError.collectAsState()
 

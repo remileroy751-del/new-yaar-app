@@ -30,19 +30,44 @@ class YaarRepository(context: Context) {
     private val supabaseSync = SupabaseSync(context, db)
 
     val session = SessionManager(context)
+    private val credentialStore = CredentialStore(context)
+
+    fun savedLoginEmail(): String = credentialStore.getEmail()
+    fun rememberedLoginPassword(): String? = credentialStore.getRememberedPassword()
+    fun saveLoginCredentials(email: String, password: String?, rememberPassword: Boolean) {
+        credentialStore.saveEmail(email)
+        if (rememberPassword && !password.isNullOrBlank()) credentialStore.savePassword(password)
+        else credentialStore.clearPassword()
+    }
 
     /** À appeler une fois au démarrage de l'app (voir YaarApplication.onCreate). */
     fun startRemoteSync() = supabaseSync.startRemoteSync()
 
     suspend fun synchronizeSession() {
+        // Important : supabase-kt recharge d'abord la session persistée depuis
+        // Android Storage. Ne pas lire currentUserOrNull() avant la fin de cette
+        // phase, sinon un redémarrage pouvait être interprété à tort comme une
+        // déconnexion et effacer la session locale.
+        supabaseSync.awaitAuthInitialization()
         val uid = supabaseSync.currentUid()
         if (uid == null) {
             session.clearSession()
             return
         }
+
         val localId = session.currentUserId.first()
         if (localId != null) {
             getUser(localId)?.let { userDao.update(it.copy(firebaseUid = uid)) }
+            return
+        }
+
+        // Restauration automatique si le fichier DataStore local a été perdu
+        // alors que la session Supabase est toujours valide.
+        val restored = userDao.findByFirebaseUid(uid)
+            ?: supabaseSync.currentEmail()?.let { userDao.findByEmail(supabaseSync.normalizeEmail(it)) }
+        if (restored != null) {
+            userDao.update(restored.copy(firebaseUid = uid))
+            session.setCurrentUser(restored.id)
         }
     }
 
@@ -111,6 +136,9 @@ class YaarRepository(context: Context) {
             user = user.copy(firebaseUid = uid).also { userDao.update(it) }
             user = supabaseSync.restoreAccount(user)
             session.setCurrentUser(user.id)
+            // L'e-mail est toujours mémorisé localement. Le mot de passe reste
+            // mémorisé uniquement lorsque l'utilisateur l'a explicitement demandé.
+            credentialStore.saveEmail(normalizedEmail)
             AuthResult.Success(user)
         } catch (e: Exception) {
             AuthResult.Error(authErrorMessage(e))

@@ -6,6 +6,7 @@ import android.util.Log
 import com.yaarapp.app.supabase.SupabaseModule
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
@@ -15,6 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -146,7 +148,15 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         runCatching { client.auth.signOut() }
     }
 
+    suspend fun awaitAuthInitialization() {
+        runCatching {
+            client.auth.sessionStatus.first { status -> status !is SessionStatus.Initializing }
+        }
+    }
+
     suspend fun currentUid(): String? = runCatching { client.auth.currentUserOrNull()?.id }.getOrNull()
+
+    suspend fun currentEmail(): String? = runCatching { client.auth.currentUserOrNull()?.email }.getOrNull()
 
     fun startRemoteSync() {
         if (started) return

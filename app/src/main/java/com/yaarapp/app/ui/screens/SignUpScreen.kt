@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,6 +58,9 @@ fun SignUpScreen(
     var confirmation by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmationVisible by remember { mutableStateOf(false) }
+    var showRememberDialog by remember { mutableStateOf(false) }
+    var pendingEmail by remember { mutableStateOf("") }
+    var pendingPassword by remember { mutableStateOf("") }
     val error by viewModel.authError.collectAsState()
     val country by viewModel.onboardingCountry.collectAsState()
     val city by viewModel.onboardingCity.collectAsState()
@@ -163,7 +167,11 @@ fun SignUpScreen(
             Button(
                 onClick = {
                     if (password != confirmation) return@Button
-                    viewModel.signUp(firstName.trim(), email.trim(), localWhatsapp.trim(), password) { onSignedUp() }
+                    viewModel.signUp(firstName.trim(), email.trim(), localWhatsapp.trim(), password) {
+                        pendingEmail = email.trim()
+                        pendingPassword = password
+                        showRememberDialog = true
+                    }
                 },
                 enabled = password.length == 6 && confirmation == password && password.matches(Regex("^[A-Za-z0-9]{6}$")),
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
@@ -173,5 +181,37 @@ fun SignUpScreen(
         }
 
         TextButton(onClick = { viewModel.clearAuthError(); onGoToLogin() }, modifier = Modifier.padding(top = 8.dp)) { Text("J'ai déjà un compte, me connecter") }
+    }
+
+    if (showRememberDialog) {
+        AlertDialog(
+            onDismissRequest = { /* L'utilisateur doit choisir Oui ou Non. */ },
+            title = { Text("Se souvenir de mon mot de passe ?") },
+            text = {
+                Text(
+                    "Votre adresse e-mail sera toujours mémorisée sur ce téléphone. Si vous choisissez Oui, votre mot de passe sera conservé de manière chiffrée pour éviter de le ressaisir à chaque connexion."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.saveLoginCredentials(pendingEmail, pendingPassword, true)
+                        pendingPassword = ""
+                        showRememberDialog = false
+                        onSignedUp()
+                    }
+                ) { Text("Oui") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.saveLoginCredentials(pendingEmail, null, false)
+                        pendingPassword = ""
+                        showRememberDialog = false
+                        onSignedUp()
+                    }
+                ) { Text("Non") }
+            }
+        )
     }
 }

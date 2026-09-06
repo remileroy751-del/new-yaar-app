@@ -20,9 +20,13 @@ import com.yaarapp.app.R
 import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(onFinished: () -> Unit) {
-    LaunchedEffect(Unit) {
-        delay(1200)
+fun SplashScreen(
+    sessionReady: Boolean = true,
+    onFinished: () -> Unit
+) {
+    LaunchedEffect(sessionReady) {
+        delay(800)
+        while (!sessionReady) delay(100)
         onFinished()
     }
 

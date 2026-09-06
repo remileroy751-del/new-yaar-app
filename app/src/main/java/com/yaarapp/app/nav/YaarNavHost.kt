@@ -65,7 +65,9 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
         ) {
             NavHost(navController = navController, startDestination = Routes.SPLASH) {
                 composable(Routes.SPLASH) {
-                    SplashScreen(onFinished = {
+                    SplashScreen(
+                        sessionReady = viewModel.sessionReady.collectAsStateWithLifecycle().value,
+                        onFinished = {
                         val destination = if (!termsAccepted) {
                             Routes.TERMS
                         } else {

@@ -99,7 +99,7 @@ fun MyShopScreen(
     val expiredNotice by viewModel.expiredNotice.collectAsStateWithLifecycle()
     val unreadCount by viewModel.unreadInterestCount.collectAsStateWithLifecycle()
     val lastSyncEvent by viewModel.lastSyncEvent.collectAsStateWithLifecycle()
-    val maxProducts = shop!!.maxProducts
+    val maxProducts = shop!!.maxProducts.coerceAtLeast(1)
     val activeCount = products.count { it.isActive }
 
     Scaffold(
@@ -265,6 +265,7 @@ fun MyShopScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
