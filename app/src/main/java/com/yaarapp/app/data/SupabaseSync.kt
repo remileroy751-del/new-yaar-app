@@ -470,7 +470,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
             throw IllegalStateException("La photo est introuvable sur cet appareil.")
         }
         val finalPath = storagePath.substringBeforeLast('.') + extensionFor(file.name)
-        client.storage.from(bucketName).upload(finalPath, file) { upsert = true }
+        client.storage.from(bucketName).upload(finalPath, file.readBytes()) { upsert = true }
         val publicUrl = if (bucketName == "id_cards") "" else client.storage.from(bucketName).publicUrl(finalPath)
         return finalPath to publicUrl
     }
