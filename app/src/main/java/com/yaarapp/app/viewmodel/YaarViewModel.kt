@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
@@ -296,12 +297,20 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val myShop: StateFlow<Shop?> = currentUserId.flatMapLatest { id ->
-        if (id == null) emptyFlow() else repository.observeMyShop(id)
+        if (id == null) {
+            flowOf(null)
+        } else {
+            repository.observeMyShop(id).catch { emit(null) }
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val myShopProducts: StateFlow<List<Product>> = myShop.flatMapLatest { shop ->
-        if (shop == null) emptyFlow() else repository.observeShopProducts(shop.id)
+        if (shop == null) {
+            flowOf(emptyList())
+        } else {
+            repository.observeShopProducts(shop.id).catch { emit(emptyList()) }
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _shopCreationError = MutableStateFlow<String?>(null)
@@ -341,8 +350,13 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     fun checkShopExpirations() {
         val shop = myShop.value ?: return
         viewModelScope.launch {
-            val count = repository.deactivateExpiredProducts(shop.id)
-            if (count > 0) _expiredNotice.value = count
+            runCatching { repository.deactivateExpiredProducts(shop.id) }
+                .onSuccess { count -> if (count > 0) _expiredNotice.value = count }
+                .onFailure { e ->
+                    repository.reportLocalSyncIssue(
+                        "Impossible de vérifier les produits expirés : ${e.message ?: "erreur locale"}"
+                    )
+                }
         }
     }
 

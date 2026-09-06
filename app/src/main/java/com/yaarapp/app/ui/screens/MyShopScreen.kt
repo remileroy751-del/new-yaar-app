@@ -16,9 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,16 +82,18 @@ fun MyShopScreen(
     val shop by viewModel.myShop.collectAsStateWithLifecycle()
     val error by viewModel.shopCreationError.collectAsStateWithLifecycle()
 
-    if (shop == null) {
+    // Tant qu'aucune boutique n'existe, on affiche uniquement le formulaire de création.
+    // Aucun accès forcé à shop n'est effectué ici : cela évite les NPE lors de la
+    // restauration asynchrone de la session ou de la base locale.
+    val currentShop = shop
+    if (currentShop == null) {
         CreateShopForm(error = error) { name, logoUrl, activity, categories ->
             viewModel.createShop(name, logoUrl, activity, categories) {}
         }
         return
     }
 
-    // Vérifie, à chaque ouverture de la boutique, si des produits ont dépassé
-    // les 14 jours d'exposition gratuite et doivent être désactivés.
-    LaunchedEffect(shop!!.id) {
+    LaunchedEffect(currentShop.id) {
         viewModel.checkShopExpirations()
     }
 
@@ -99,13 +101,14 @@ fun MyShopScreen(
     val expiredNotice by viewModel.expiredNotice.collectAsStateWithLifecycle()
     val unreadCount by viewModel.unreadInterestCount.collectAsStateWithLifecycle()
     val lastSyncEvent by viewModel.lastSyncEvent.collectAsStateWithLifecycle()
-    val maxProducts = shop!!.maxProducts.coerceAtLeast(1)
+    val maxProducts = currentShop.maxProducts.coerceAtLeast(1)
     val activeCount = products.count { it.isActive }
+    val productRows = remember(products) { products.chunked(2) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ma boutique — ${shop!!.name}", fontWeight = FontWeight.Bold) },
+                title = { Text("Ma boutique — ${currentShop.name}", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onOpenNotifications) {
                         if (unreadCount > 0) {
@@ -121,162 +124,186 @@ fun MyShopScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                if (activeCount >= maxProducts) {
-                    onSeePlans()
-                } else {
-                    onAddProduct()
-                }
+                if (activeCount >= maxProducts) onSeePlans() else onAddProduct()
             }) {
                 Icon(Icons.Filled.Add, contentDescription = "Ajouter un produit")
             }
         }
     ) { padding ->
-        Column(
+        // Un seul conteneur vertical défilant pour tout l'écran.
+        // Cela élimine le risque de contraintes infinies lié à l'association
+        // Column/verticalScroll/LazyVerticalGrid et reste conforme aux recommandations
+        // Compose pour les contenus verticaux complexes.
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             if (lastSyncEvent != null) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (lastSyncEvent!!.startsWith("✅"))
-                            MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "Synchronisation en ligne (Supabase)",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium
+                item(key = "sync_event") {
+                    val syncMessage = lastSyncEvent.orEmpty()
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (syncMessage.startsWith("✅"))
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.errorContainer
                         )
-                        Text(lastSyncEvent ?: "", style = MaterialTheme.typography.bodySmall)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Synchronisation en ligne (Supabase)",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(syncMessage, style = MaterialTheme.typography.bodySmall)
+                            TextButton(
+                                onClick = { viewModel.dismissLastSyncEvent() },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Compris")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (expiredNotice != null) {
+                item(key = "expired_notice") {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${expiredNotice ?: 0} produit(s) désactivé(s) automatiquement",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    "Ces produits sont en ligne depuis plus de $FREE_LISTING_DURATION_DAYS jours. Vérifiez votre boutique : remettez en vente ceux encore disponibles, ou supprimez ceux déjà vendus.",
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                         TextButton(
-                            onClick = { viewModel.dismissLastSyncEvent() },
-                            modifier = Modifier.align(Alignment.End)
+                            onClick = { viewModel.dismissExpiredNotice() },
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(end = 8.dp, bottom = 4.dp)
                         ) {
                             Text("Compris")
                         }
                     }
                 }
             }
-            if (expiredNotice != null) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
+
+            item(key = "shop_summary") {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(
+                        "$activeCount / $maxProducts produits actifs" +
+                            if (currentShop.extraProductSlots > 0) " (capacité étendue)" else " (forfait gratuit)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    LinearProgressIndicator(
+                        progress = { (activeCount.toFloat() / maxProducts).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                    )
+
                     Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            Icons.Filled.Notifications,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "$expiredNotice produit(s) désactivé(s) automatiquement",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                "Ces produits sont en ligne depuis plus de $FREE_LISTING_DURATION_DAYS jours. Vérifiez votre boutique : remettez en vente ceux encore disponibles, ou supprimez ceux déjà vendus.",
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        OutlinedButton(
+                            onClick = onSeePlans,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Publier plus de produits", style = MaterialTheme.typography.labelMedium)
                         }
-                    }
-                    TextButton(
-                        onClick = { viewModel.dismissExpiredNotice() },
-                        modifier = Modifier.align(Alignment.End).padding(end = 8.dp, bottom = 4.dp)
-                    ) {
-                        Text("Compris")
-                    }
-                }
-            }
-
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "$activeCount / $maxProducts produits actifs" +
-                        if (shop!!.extraProductSlots > 0) " (capacité étendue)" else " (forfait gratuit)",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                LinearProgressIndicator(
-                    progress = { (activeCount.toFloat() / maxProducts).coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp)
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onSeePlans,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Publier plus de produits", style = MaterialTheme.typography.labelMedium)
-                    }
-                    OutlinedButton(
-                        onClick = onPromoteProducts,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Text(" Promouvoir mes produits", style = MaterialTheme.typography.labelMedium)
+                        OutlinedButton(
+                            onClick = onPromoteProducts,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text(" Promouvoir mes produits", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
 
             if (products.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Filled.Storefront,
-                        contentDescription = null,
-                        modifier = Modifier.size(56.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        "Aucun produit publié pour le moment. Appuyez sur + pour ajouter votre premier article.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
+                item(key = "empty_products") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.Storefront,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            "Aucun produit publié pour le moment. Appuyez sur + pour ajouter votre premier article.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 12.dp)
+                        )
+                    }
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(products, key = { it.id }) { product ->
-                        MyProductCard(
-                            product = product,
-                            onDelete = { viewModel.deleteProduct(product) },
-                            onDeactivate = { viewModel.deactivateProduct(product) },
-                            onRepublish = { viewModel.republishProduct(product) }
-                        )
+                items(
+                    items = productRows,
+                    key = { row -> "product_row_${row.firstOrNull()?.id ?: 0}" }
+                ) { row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        row.forEach { product ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                MyProductCard(
+                                    product = product,
+                                    onDelete = { viewModel.deleteProduct(product) },
+                                    onDeactivate = { viewModel.deactivateProduct(product) },
+                                    onRepublish = { viewModel.republishProduct(product) }
+                                )
+                            }
+                        }
+                        if (row.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }

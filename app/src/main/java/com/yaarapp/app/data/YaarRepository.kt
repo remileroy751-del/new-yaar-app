@@ -79,6 +79,11 @@ class YaarRepository(context: Context) {
 
     fun clearLastSyncEvent() = supabaseSync.clearLastSyncEvent()
 
+    /** Affiche une erreur locale dans la bannière de diagnostic sans faire tomber l'application. */
+    fun reportLocalSyncIssue(message: String) {
+        supabaseSync.reportFailure(message)
+    }
+
     // ---------- Authentification Supabase ----------
 
     suspend fun signUp(

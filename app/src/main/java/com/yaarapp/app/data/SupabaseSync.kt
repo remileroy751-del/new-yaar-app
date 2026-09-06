@@ -53,7 +53,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
 
     fun clearLastSyncEvent() { _lastSyncEvent.value = null }
     private fun success(message: String) { Log.i(TAG, message); _lastSyncEvent.value = "✅ $message" }
-    private fun failure(message: String) { Log.w(TAG, message); _lastSyncEvent.value = "❌ $message" }
+    fun reportFailure(message: String) { Log.w(TAG, message); _lastSyncEvent.value = "❌ $message" }
 
     fun normalizeWhatsapp(whatsappNumber: String): String {
         var digits = whatsappNumber.filter(Char::isDigit)
@@ -166,7 +166,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
                 refreshPublicData()
                 success("Connexion Supabase OK — synchronisation démarrée.")
             } catch (e: Exception) {
-                failure("Connexion Supabase impossible : ${e.message ?: "erreur réseau"}")
+                reportFailure("Connexion Supabase impossible : ${e.message ?: "erreur réseau"}")
             }
             while (true) {
                 delay(POLL_INTERVAL_MS)
@@ -292,7 +292,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return cloudUser
     }
 
-    fun syncUser(user: User) { syncScope.launch { runCatching { syncUserNow(user) }.onFailure { failure("Échec de synchronisation du profil : ${it.message}") } } }
+    fun syncUser(user: User) { syncScope.launch { runCatching { syncUserNow(user) }.onFailure { reportFailure("Échec de synchronisation du profil : ${it.message}") } } }
 
     suspend fun syncShopNow(shop: Shop): Shop {
         val uid = currentUid() ?: throw IllegalStateException("Session Supabase introuvable.")
@@ -325,7 +325,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return updated
     }
 
-    fun syncShop(shop: Shop) { syncScope.launch { runCatching { syncShopNow(shop); success("Boutique \"${shop.name}\" synchronisée.") }.onFailure { failure("Échec boutique : ${it.message}") } } }
+    fun syncShop(shop: Shop) { syncScope.launch { runCatching { syncShopNow(shop); success("Boutique \"${shop.name}\" synchronisée.") }.onFailure { reportFailure("Échec boutique : ${it.message}") } } }
 
     suspend fun syncProductNow(product: Product): Product {
         val uid = currentUid() ?: throw IllegalStateException("Session Supabase introuvable.")
@@ -356,7 +356,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return updated
     }
 
-    fun syncProduct(product: Product) { syncScope.launch { runCatching { syncProductNow(product); success("Produit \"${product.name}\" synchronisé.") }.onFailure { failure("Échec produit : ${it.message}") } } }
+    fun syncProduct(product: Product) { syncScope.launch { runCatching { syncProductNow(product); success("Produit \"${product.name}\" synchronisé.") }.onFailure { reportFailure("Échec produit : ${it.message}") } } }
 
     fun deleteProductRemote(product: Product) {
         val id = product.remoteId ?: return
