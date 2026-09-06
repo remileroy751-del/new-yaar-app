@@ -40,7 +40,7 @@ class YaarRepository(context: Context) {
             session.clearSession()
             return
         }
-        val localId = session.currentUser.firstOrNull()
+        val localId = session.currentUserId.firstOrNull()
         if (localId != null) {
             getUser(localId)?.let { userDao.update(it.copy(firebaseUid = uid)) }
         }

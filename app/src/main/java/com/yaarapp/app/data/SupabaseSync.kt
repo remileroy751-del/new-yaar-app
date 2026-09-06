@@ -4,11 +4,11 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.yaarapp.app.supabase.SupabaseModule
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.signInWith
-import io.github.jan.supabase.auth.signUpWith
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.storage.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +26,13 @@ import java.time.format.DateTimeParseException
 
 private const val TAG = "YaarSupabaseSync"
 private const val POLL_INTERVAL_MS = 15_000L
+
+private fun Long.toIso(): String = Instant.ofEpochMilli(this).toString()
+private fun String.toEpochMillis(): Long = try { Instant.parse(this).toEpochMilli() } catch (_: DateTimeParseException) { System.currentTimeMillis() }
+private fun extractStorageObjectPath(url: String): String? {
+    val marker = "/storage/v1/object/public/"
+    return url.substringAfter(marker, "").substringAfter('/', "").takeIf { it.isNotBlank() }
+}
 
 /** Synchronisation Yaar-App <-> Supabase. Firebase n'est plus utilisé par cette classe. */
 class SupabaseSync(context: Context, private val db: YaarDatabase) {
@@ -129,7 +136,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
     suspend fun deleteCurrentAccount() {
         currentUid() ?: throw IllegalStateException("Compte Supabase introuvable.")
         // Le RPC SECURITY DEFINER supprime auth.users après les données publiques.
-        client.rpc("delete_my_account")
+        client.postgrest.rpc("delete_my_account")
         runCatching { client.auth.signOut() }
     }
 
@@ -176,7 +183,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
 
     private suspend fun applyProduct(row: ProductRow) {
         val existing = productDao.findByRemoteId(row.id)
-        val localShopId = shopDao.findByRemoteId(row.shopRemoteId)?.id ?: existing?.shopId ?: 0
+        val localShopId = shopDao.findByRemoteId(row.shopId)?.id ?: existing?.shopId ?: 0
         val local = row.toDomain(existing?.id ?: 0, localShopId)
         if (existing == null) productDao.insert(local) else productDao.update(local)
     }
@@ -287,7 +294,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         val row = ShopRow(
             id = id, ownerUid = uid, name = updated.name, whatsappNumber = updated.whatsappNumber,
             country = updated.country.name, city = updated.city, logoUrl = updated.logoUrl,
-            logoStoragePath = logo?.first ?: extractObjectPath(updated.logoUrl.orEmpty()),
+            logoStoragePath = logo?.first ?: extractStorageObjectPath(updated.logoUrl.orEmpty()),
             activityDescription = updated.activityDescription, categories = updated.categories,
             extraProductSlots = updated.extraProductSlots, certificationStatus = updated.certificationStatus.name,
             idCardFrontUrl = null, idCardBackUrl = null,
@@ -489,11 +496,6 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return url.substringAfter(marker, "")
     }
 
-    private fun extractObjectPath(url: String): String? =
-        extractStoragePath(url).substringAfter('/', "").takeIf { it.isNotBlank() }
-
-    private fun Long.toIso(): String = Instant.ofEpochMilli(this).toString()
-    private fun String.toEpochMillis(): Long = try { Instant.parse(this).toEpochMilli() } catch (_: DateTimeParseException) { System.currentTimeMillis() }
 
     @Serializable data class UserRow(
         val id: String,
@@ -533,7 +535,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         fun toDomain(localId: Int, ownerId: Int) = Shop(localId, ownerId, ownerUid, name, whatsappNumber, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, logoUrl, activityDescription, categories, extraProductSlots, runCatching { CertificationStatus.valueOf(certificationStatus) }.getOrDefault(CertificationStatus.NONE), idCardFrontUrl, idCardBackUrl, certificationRequestedAt?.toEpochMillis(), certificationPaidAt?.toEpochMillis(), certificationExpiresAt?.toEpochMillis(), createdAt?.toEpochMillis() ?: System.currentTimeMillis(), id)
         companion object { fun from(s: Shop) = ShopRow(
             s.remoteId ?: error("ID boutique manquant"), s.ownerUid ?: error("UID manquant"), s.name, s.whatsappNumber, s.country.name, s.city,
-            s.logoUrl, s.logoUrl?.let { extractObjectPath(it) }, s.activityDescription, s.categories, s.extraProductSlots, s.certificationStatus.name,
+            s.logoUrl, s.logoUrl?.let { extractStorageObjectPath(it) }, s.activityDescription, s.categories, s.extraProductSlots, s.certificationStatus.name,
             null, null, s.certificationRequestedAt?.toIso(), s.certificationPaidAt?.toIso(), s.certificationExpiresAt?.toIso(), s.createdAt.toIso(),
             s.idCardFrontUrl?.takeIf { !it.startsWith("http") }, s.idCardBackUrl?.takeIf { !it.startsWith("http") }
         ) }
@@ -559,7 +561,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         @SerialName("is_promoted") val isPromoted: Boolean = false
     ) {
         fun toDomain(localId: Int, localShopId: Int) = Product(localId, localShopId, shopName, name, description, price, imageUrl, category, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, availableCities.ifEmpty { listOf(city) }, ownerUid, shopId, isActive, createdAt?.toEpochMillis() ?: System.currentTimeMillis(), activatedAt?.toEpochMillis() ?: (createdAt?.toEpochMillis() ?: System.currentTimeMillis()), isPromoted, id)
-        companion object { fun from(p: Product) = ProductRow(p.remoteId ?: error("ID produit manquant"), p.shopRemoteId ?: error("ID boutique manquant"), p.ownerUid ?: error("UID manquant"), p.shopName, p.name, p.description, p.price, p.imageUrl, extractObjectPath(p.imageUrl), p.category, p.country.name, p.city, p.availableCities.ifEmpty { listOf(p.city) }, p.isActive, p.createdAt.toIso(), p.activatedAt.toIso(), p.isPromoted) }
+        companion object { fun from(p: Product) = ProductRow(p.remoteId ?: error("ID produit manquant"), p.shopRemoteId ?: error("ID boutique manquant"), p.ownerUid ?: error("UID manquant"), p.shopName, p.name, p.description, p.price, p.imageUrl, extractStorageObjectPath(p.imageUrl), p.category, p.country.name, p.city, p.availableCities.ifEmpty { listOf(p.city) }, p.isActive, p.createdAt.toIso(), p.activatedAt.toIso(), p.isPromoted) }
     }
 
     @Serializable data class ProductImageRow(val id: String, @SerialName("product_id") val productId: String, @SerialName("owner_uid") val ownerUid: String, @SerialName("storage_path") val storagePath: String, @SerialName("public_url") val publicUrl: String?, @SerialName("sort_order") val sortOrder: Int)
