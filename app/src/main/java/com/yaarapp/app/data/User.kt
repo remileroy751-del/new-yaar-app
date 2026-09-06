@@ -7,14 +7,15 @@ import androidx.room.PrimaryKey
  * Profil local d'un compte Yaar-App.
  *
  * Le mot de passe n'est JAMAIS stocké ici ni dans Supabase : il est géré
- * par Supabase Authentication (Email/Password). L'adresse e-mail technique
- * utilisée par Firebase est dérivée du numéro WhatsApp et n'est pas affichée.
+ * par Supabase Authentication (Email/Password). L'adresse e-mail saisie par
+ * l'utilisateur est l'identifiant de connexion Supabase.
  */
 @Entity(tableName = "users")
 data class User(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val firstName: String,
+    val email: String,
     val country: Country,
     val city: String,
     val whatsappNumber: String,

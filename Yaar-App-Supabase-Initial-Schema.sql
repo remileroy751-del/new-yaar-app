@@ -12,6 +12,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.users (
     id uuid primary key references auth.users(id) on delete cascade,
     first_name text not null,
+    email text not null unique,
     country text not null check (country in (
         'BENIN','BURKINA_FASO','COTE_DIVOIRE','MALI','NIGER','SENEGAL','TOGO'
     )),

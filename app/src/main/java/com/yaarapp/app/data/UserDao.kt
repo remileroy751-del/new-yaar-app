@@ -10,6 +10,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE whatsappNumber = :whatsappNumber LIMIT 1")
     suspend fun findByWhatsapp(whatsappNumber: String): User?
 
+    @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
+    suspend fun findByEmail(email: String): User?
+
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     suspend fun findById(id: Int): User?
 

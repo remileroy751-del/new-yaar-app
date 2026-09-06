@@ -108,6 +108,7 @@ fun ProfileScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    Row1(icon = Icons.Filled.Storefront, label = "Adresse e-mail", value = user?.email ?: "")
                     Row1(icon = Icons.Filled.Storefront, label = "Numéro WhatsApp", value = user?.whatsappNumber ?: "")
                     if (shop != null) {
                         Row1(icon = Icons.Filled.Storefront, label = "Ma boutique", value = shop!!.name)

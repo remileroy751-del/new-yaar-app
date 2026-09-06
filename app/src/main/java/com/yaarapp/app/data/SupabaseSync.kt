@@ -60,22 +60,26 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return if (codes.any { digits.startsWith(it) }) "00$digits" else digits
     }
 
-    fun authEmailForWhatsapp(whatsappNumber: String): String =
-        normalizeWhatsapp(whatsappNumber) + "@login.yaar-app.com"
+    fun normalizeEmail(email: String): String = email.trim().lowercase()
+
+    fun isValidEmail(email: String): Boolean =
+        email.matches(Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))
 
     fun isValidPassword(password: String): Boolean =
         password.matches(Regex("^[A-Za-z0-9]{6}$"))
 
-    suspend fun createAccount(whatsappNumber: String, password: String, firstName: String, country: Country, city: String): User {
+    suspend fun createAccount(email: String, whatsappNumber: String, password: String, firstName: String, country: Country, city: String): User {
+        val normalizedEmail = normalizeEmail(email)
+        require(isValidEmail(normalizedEmail)) { "Adresse e-mail invalide." }
         require(isValidPassword(password)) { "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement." }
-        val email = authEmailForWhatsapp(whatsappNumber)
         client.auth.signUpWith(Email) {
-            this.email = email
+            this.email = normalizedEmail
             this.password = password
         }
         val uid = currentUid() ?: throw IllegalStateException("Supabase n'a pas créé la session du compte. Vérifiez que l'authentification Email est activée et que Confirm email est désactivé.")
         val user = User(
             firstName = firstName,
+            email = normalizedEmail,
             country = country,
             city = city,
             whatsappNumber = whatsappNumber,
@@ -85,26 +89,28 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return user
     }
 
-    suspend fun signIn(whatsappNumber: String, password: String): String {
+    suspend fun signIn(email: String, password: String): String {
+        val normalizedEmail = normalizeEmail(email)
+        require(isValidEmail(normalizedEmail)) { "Adresse e-mail invalide." }
         require(isValidPassword(password)) { "Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement." }
         client.auth.signInWith(Email) {
-            email = authEmailForWhatsapp(whatsappNumber)
+            this.email = normalizedEmail
             this.password = password
         }
         return currentUid() ?: throw IllegalStateException("Session Supabase introuvable après connexion.")
+    }
+
+    suspend fun verifyPassword(email: String, password: String) {
+        client.auth.signInWith(Email) {
+            this.email = normalizeEmail(email)
+            this.password = password
+        }
     }
 
     suspend fun signOut() {
         runCatching { client.auth.signOut() }
     }
 
-    suspend fun verifyPassword(whatsappNumber: String, password: String) {
-        // Une nouvelle authentification valide le mot de passe courant sans exposer de secret.
-        client.auth.signInWith(Email) {
-            email = authEmailForWhatsapp(whatsappNumber)
-            this.password = password
-        }
-    }
 
     suspend fun deleteAccountData(uid: String) {
         // Supprimer d'abord les fichiers via Storage API : Supabase recommande de passer
@@ -247,11 +253,11 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return remote
     }
 
-    suspend fun createLocalUserFromCloud(uid: String, whatsappNumber: String): User? {
+    suspend fun createLocalUserFromCloud(uid: String, email: String): User? {
         val row = client.from("users").select {
             filter { eq("id", uid) }
         }.decodeList<UserRow>().firstOrNull() ?: return null
-        val existing = userDao.findByFirebaseUid(uid) ?: userDao.findByWhatsapp(whatsappNumber)
+        val existing = userDao.findByFirebaseUid(uid) ?: userDao.findByEmail(normalizeEmail(email))
         val user = row.toDomain(existing?.id ?: 0)
         if (existing == null) userDao.insert(user) else userDao.update(user)
         return user.copy(id = existing?.id ?: userDao.findByFirebaseUid(uid)?.id ?: 0)
@@ -259,7 +265,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
 
     suspend fun restoreAccount(localUser: User): User {
         val uid = currentUid() ?: return localUser
-        val cloudUser = createLocalUserFromCloud(uid, localUser.whatsappNumber) ?: localUser.copy(firebaseUid = uid)
+        val cloudUser = createLocalUserFromCloud(uid, localUser.email) ?: localUser.copy(firebaseUid = uid)
         if (cloudUser.id == 0) {
             val id = userDao.insert(cloudUser).toInt()
             return cloudUser.copy(id = id)
@@ -500,14 +506,15 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
     @Serializable data class UserRow(
         val id: String,
         @SerialName("first_name") val firstName: String,
+        val email: String,
         val country: String,
         val city: String,
         @SerialName("whatsapp_number") val whatsappNumber: String,
         @SerialName("notifications_enabled") val notificationsEnabled: Boolean = true,
         @SerialName("created_at") val createdAt: String? = null
     ) {
-        fun toDomain(localId: Int): User = User(localId, firstName, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, whatsappNumber, notificationsEnabled, createdAt?.toEpochMillis() ?: System.currentTimeMillis(), id)
-        companion object { fun from(u: User) = UserRow(u.firebaseUid ?: error("UID manquant"), u.firstName, u.country.name, u.city, u.whatsappNumber, u.notificationsEnabled, u.createdAt.toIso()) }
+        fun toDomain(localId: Int): User = User(localId, firstName, email, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, whatsappNumber, notificationsEnabled, createdAt?.toEpochMillis() ?: System.currentTimeMillis(), id)
+        companion object { fun from(u: User) = UserRow(u.firebaseUid ?: error("UID manquant"), u.firstName, u.email, u.country.name, u.city, u.whatsappNumber, u.notificationsEnabled, u.createdAt.toIso()) }
     }
 
     @Serializable data class ShopRow(

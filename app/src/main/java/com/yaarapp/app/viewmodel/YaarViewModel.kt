@@ -102,12 +102,15 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
 
     // ---------- Authentification ----------
 
+    fun isValidEmail(email: String): Boolean = repository.isValidEmail(email)
+
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError
 
-    /** Étapes 2 et 3 : identité WhatsApp puis mot de passe. */
+    /** Étapes 2 et 3 : identité e-mail puis mot de passe. */
     fun signUp(
         firstName: String,
+        email: String,
         localWhatsappNumber: String,
         password: String,
         onDone: () -> Unit
@@ -116,6 +119,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         val city = _onboardingCity.value
         if (country == null || city == null) {
             _authError.value = "Merci de sélectionner votre pays et votre ville."
+            return
+        }
+        if (!repository.isValidEmail(email)) {
+            _authError.value = "Veuillez saisir une adresse e-mail valide."
             return
         }
         if (!PhoneFormat.isValidLocalNumber(localWhatsappNumber)) {
@@ -128,7 +135,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
         val whatsappNumber = PhoneFormat.formatWhatsapp(country, localWhatsappNumber)
         viewModelScope.launch {
-            when (val result = repository.signUp(firstName, country, city, whatsappNumber, password)) {
+            when (val result = repository.signUp(firstName, email, country, city, whatsappNumber, password)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user
@@ -157,10 +164,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
-    /** Connexion par numéro WhatsApp + mot de passe Supabase. */
-    fun login(whatsappNumber: String, password: String, onDone: () -> Unit) {
+    /** Connexion par adresse e-mail + mot de passe Supabase. */
+    fun login(email: String, password: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            when (val result = repository.login(whatsappNumber, password)) {
+            when (val result = repository.login(email, password)) {
                 is AuthResult.Success -> {
                     _authError.value = null
                     _currentUser.value = result.user

@@ -40,7 +40,7 @@ import com.yaarapp.app.viewmodel.YaarViewModel
 
 @Composable
 fun LoginScreen(viewModel: YaarViewModel, onLoggedIn: () -> Unit, onGoToSignUp: () -> Unit) {
-    var whatsapp by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
     val error by viewModel.authError.collectAsState()
@@ -48,10 +48,10 @@ fun LoginScreen(viewModel: YaarViewModel, onLoggedIn: () -> Unit, onGoToSignUp: 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Image(painter = painterResource(id = R.drawable.logo_icon), contentDescription = "Yaar-App", modifier = Modifier.size(96.dp))
         Text("Connexion", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 20.dp))
-        OutlinedTextField(value = whatsapp, onValueChange = { whatsapp = it.filter(Char::isDigit) }, label = { Text("Numéro WhatsApp (ex : 0022890000000)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = email, onValueChange = { email = it.trim() }, label = { Text("Adresse e-mail") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = password, onValueChange = { if (it.length <= 6 && it.all(Char::isLetterOrDigit)) password = it }, label = { Text("Mot de passe") }, singleLine = true, visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton(onClick = { visible = !visible }) { Icon(if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = if (visible) "Cacher" else "Afficher") } }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
         if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-        Button(onClick = { viewModel.login(whatsapp.trim(), password) { onLoggedIn() } }, enabled = whatsapp.isNotBlank() && password.length == 6, modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Se connecter") }
+        Button(onClick = { viewModel.login(email.trim(), password) { onLoggedIn() } }, enabled = viewModel.isValidEmail(email) && password.length == 6, modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Se connecter") }
         TextButton(onClick = { viewModel.clearAuthError(); onGoToSignUp() }, modifier = Modifier.padding(top = 8.dp)) { Text("Pas encore de compte ? Créer un compte") }
     }
 }

@@ -47,6 +47,7 @@ class YaarRepository(context: Context) {
     }
 
     fun isValidPassword(password: String): Boolean = supabaseSync.isValidPassword(password)
+    fun isValidEmail(email: String): Boolean = supabaseSync.isValidEmail(supabaseSync.normalizeEmail(email))
 
     /** Dernier évènement de synchronisation Supabase, en clair (pour affichage direct dans l'app). */
     val lastSyncEvent get() = supabaseSync.lastSyncEvent
@@ -57,18 +58,21 @@ class YaarRepository(context: Context) {
 
     suspend fun signUp(
         firstName: String,
+        email: String,
         country: Country,
         city: String,
         whatsappNumber: String,
         password: String
     ): AuthResult {
         val canonicalWhatsapp = supabaseSync.normalizeWhatsapp(whatsappNumber)
-        if (firstName.isBlank() || city.isBlank()) return AuthResult.Error("Merci de renseigner votre nom complet.")
+        val normalizedEmail = supabaseSync.normalizeEmail(email)
+        if (firstName.isBlank() || city.isBlank()) return AuthResult.Error("Merci de renseigner votre prénom et votre ville.")
+        if (!supabaseSync.isValidEmail(normalizedEmail)) return AuthResult.Error("Veuillez saisir une adresse e-mail valide.")
         if (canonicalWhatsapp.length < 10) return AuthResult.Error("Le numéro WhatsApp saisi semble incomplet.")
         if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        if (userDao.findByWhatsapp(canonicalWhatsapp) != null) return AuthResult.Error("Un compte local existe déjà avec ce numéro WhatsApp. Connectez-vous avec votre mot de passe.")
+        if (userDao.findByEmail(normalizedEmail) != null) return AuthResult.Error("Un compte local existe déjà avec cette adresse e-mail. Connectez-vous avec votre mot de passe.")
         return try {
-            val created = supabaseSync.createAccount(canonicalWhatsapp, password, firstName, country, city)
+            val created = supabaseSync.createAccount(normalizedEmail, canonicalWhatsapp, password, firstName, country, city)
             val id = userDao.insert(created).toInt()
             val local = created.copy(id = id)
             session.setCurrentUser(id)
@@ -85,7 +89,7 @@ class YaarRepository(context: Context) {
         // nouveau compte Supabase avec le même numéro et les mêmes données de profil.
         if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         return try {
-            val created = supabaseSync.createAccount(user.whatsappNumber, password, user.firstName, user.country, user.city)
+            val created = supabaseSync.createAccount(user.email, user.whatsappNumber, password, user.firstName, user.country, user.city)
             val upgraded = user.copy(firebaseUid = created.firebaseUid)
             userDao.update(upgraded)
             supabaseSync.syncUserNow(upgraded)
@@ -95,13 +99,14 @@ class YaarRepository(context: Context) {
         }
     }
 
-    suspend fun login(whatsappNumber: String, password: String): AuthResult {
-        val canonicalWhatsapp = supabaseSync.normalizeWhatsapp(whatsappNumber)
+    suspend fun login(email: String, password: String): AuthResult {
+        val normalizedEmail = supabaseSync.normalizeEmail(email)
+        if (!supabaseSync.isValidEmail(normalizedEmail)) return AuthResult.Error("Veuillez saisir une adresse e-mail valide.")
         if (!supabaseSync.isValidPassword(password)) return AuthResult.Error("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
         return try {
-            val uid = supabaseSync.signIn(canonicalWhatsapp, password)
-            var user = userDao.findByWhatsapp(canonicalWhatsapp)
-            if (user == null) user = supabaseSync.createLocalUserFromCloud(uid, canonicalWhatsapp)
+            val uid = supabaseSync.signIn(normalizedEmail, password)
+            var user = userDao.findByEmail(normalizedEmail)
+            if (user == null) user = supabaseSync.createLocalUserFromCloud(uid, normalizedEmail)
             if (user == null) return AuthResult.Error("Compte introuvable dans Yaar-App. Créez d'abord votre compte.")
             user = user.copy(firebaseUid = uid).also { userDao.update(it) }
             user = supabaseSync.restoreAccount(user)
@@ -116,8 +121,8 @@ class YaarRepository(context: Context) {
         val message = e.message.orEmpty()
         val lower = message.lowercase()
         return when {
-            lower.contains("invalid login credentials") || lower.contains("invalid_credentials") || lower.contains("invalid credentials") -> "Numéro WhatsApp ou mot de passe incorrect."
-            lower.contains("user already registered") || lower.contains("already registered") -> "Ce numéro WhatsApp possède déjà un compte Supabase."
+            lower.contains("invalid login credentials") || lower.contains("invalid_credentials") || lower.contains("invalid credentials") -> "Adresse e-mail ou mot de passe incorrect."
+            lower.contains("user already registered") || lower.contains("already registered") -> "Cette adresse e-mail possède déjà un compte Supabase."
             lower.contains("email not confirmed") -> "La confirmation par e-mail doit être désactivée dans Supabase pour Yaar-App."
             lower.contains("network") || lower.contains("unable to resolve") || lower.contains("timeout") -> "Connexion Internet impossible. Vérifiez votre réseau puis réessayez."
             else -> message.ifBlank { "Une erreur Supabase est survenue. Vérifiez votre connexion Internet." }
@@ -133,7 +138,7 @@ class YaarRepository(context: Context) {
     suspend fun deleteAccount(user: User, password: String) {
         val uid = user.firebaseUid ?: throw IllegalStateException("Session Supabase introuvable.")
         if (!supabaseSync.isValidPassword(password)) throw IllegalArgumentException("Le mot de passe doit contenir exactement 6 caractères, lettres et chiffres uniquement.")
-        supabaseSync.verifyPassword(user.whatsappNumber, password)
+        supabaseSync.verifyPassword(user.email, password)
         supabaseSync.deleteAccountData(uid)
         productDao.deleteAllForOwnerId(user.id)
         interestDao.deleteAllForUser(user.id)

@@ -41,7 +41,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yaarapp.app.viewmodel.YaarViewModel
 
-/** Étape 2 puis étape 3 du parcours d'inscription. */
+/** Étapes 2 et 3 du parcours d'inscription : identité puis mot de passe. */
 @Composable
 fun SignUpScreen(
     viewModel: YaarViewModel,
@@ -51,6 +51,7 @@ fun SignUpScreen(
 ) {
     var step by remember { mutableStateOf(2) }
     var firstName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var localWhatsapp by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
@@ -74,22 +75,44 @@ fun SignUpScreen(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
         ) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text("${country?.labelWithFlag ?: ""} · ${city ?: ""}", fontWeight = FontWeight.Medium)
                 TextButton(onClick = onEditLocation) { Text("Modifier") }
             }
         }
 
         if (step == 2) {
+            Text(
+                "Utilisez une adresse e-mail valide pour créer et sécuriser votre compte Yaar-App.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+            )
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it.trim() },
+                label = { Text("Adresse e-mail") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            )
             OutlinedTextField(
                 value = firstName,
                 onValueChange = { firstName = it },
-                label = { Text("Nom complet") },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                label = { Text("Prénom") },
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
             )
             Text("Numéro WhatsApp", style = MaterialTheme.typography.labelLarge, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Box(modifier = Modifier.fillMaxHeight().padding(top = 8.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(horizontal = 14.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxHeight().padding(top = 8.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 14.dp, vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(prefix, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 }
                 OutlinedTextField(
@@ -102,15 +125,17 @@ fun SignUpScreen(
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
                 Icon(Icons.Filled.Chat, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp, end = 6.dp))
-                Text("Utilisez de préférence votre numéro WhatsApp : les clients pourront vous contacter directement.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Text("Votre numéro WhatsApp sert uniquement à permettre aux clients de vous contacter dans Yaar-App.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             }
+            if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
             Button(
                 onClick = {
-                    if (firstName.isBlank()) viewModel.clearAuthError()
-                    if (firstName.isNotBlank() && localWhatsapp.isNotBlank()) step = 3
+                    viewModel.clearAuthError()
+                    if (firstName.isNotBlank() && viewModel.isValidEmail(email) && localWhatsapp.isNotBlank()) step = 3
                 },
-                enabled = firstName.isNotBlank() && localWhatsapp.isNotBlank() && country != null && city != null,
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)
+                enabled = firstName.isNotBlank() && viewModel.isValidEmail(email) && localWhatsapp.isNotBlank() && country != null && city != null,
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                shape = RoundedCornerShape(14.dp)
             ) { Text("Continuer") }
         } else {
             Text("Choisissez un mot de passe de 6 caractères. Lettres et chiffres sont autorisés.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
@@ -138,15 +163,15 @@ fun SignUpScreen(
             Button(
                 onClick = {
                     if (password != confirmation) return@Button
-                    viewModel.signUp(firstName.trim(), localWhatsapp.trim(), password) { onSignedUp() }
+                    viewModel.signUp(firstName.trim(), email.trim(), localWhatsapp.trim(), password) { onSignedUp() }
                 },
                 enabled = password.length == 6 && confirmation == password && password.matches(Regex("^[A-Za-z0-9]{6}$")),
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                shape = RoundedCornerShape(14.dp)
             ) { Text("Créer mon compte") }
-            TextButton(onClick = { step = 2 }) { Text("Retour") }
+            TextButton(onClick = { viewModel.clearAuthError(); step = 2 }) { Text("Retour") }
         }
 
-        if (step == 2 && error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp))
         TextButton(onClick = { viewModel.clearAuthError(); onGoToLogin() }, modifier = Modifier.padding(top = 8.dp)) { Text("J'ai déjà un compte, me connecter") }
     }
 }
