@@ -276,8 +276,23 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                 onNavigate = { route ->
                     if (route != currentRoute) {
                         navController.navigate(route) {
-                            popUpTo(Routes.MARKETPLACE) { inclusive = false }
+                            // BUG CORRIGÉ ("Ma boutique" plantait avec "LayoutNode should be
+                            // attached to an owner") : popUpTo sans `saveState = true`, combiné
+                            // à `navigate` sans `restoreState = true`, force Navigation Compose à
+                            // détruire puis recréer les entrées de la pile à chaque changement
+                            // d'onglet. Quand cette recréation tombe en plein milieu de
+                            // l'animation de transition par défaut (AnimatedContent) de NavHost,
+                            // celle-ci essaie de mesurer un noeud déjà détaché → crash. C'est un
+                            // problème connu et documenté du pattern "bottom navigation" en
+                            // Compose : il faut systématiquement les 3 réglages ci-dessous
+                            // ensemble pour que chaque onglet conserve proprement son état
+                            // (position de scroll, etc.) au lieu d'être recréé à chaque clic.
+                            popUpTo(Routes.MARKETPLACE) {
+                                inclusive = false
+                                saveState = true
+                            }
                             launchSingleTop = true
+                            restoreState = true
                         }
                     }
                 }
