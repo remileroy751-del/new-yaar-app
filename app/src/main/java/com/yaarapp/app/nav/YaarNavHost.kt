@@ -1,5 +1,7 @@
 package com.yaarapp.app.nav
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -63,7 +65,17 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                 .fillMaxSize()
                 .weight(1f)
         ) {
-            NavHost(navController = navController, startDestination = Routes.SPLASH) {
+            // Navigation sans animation : évite le crash Compose
+            // "LayoutNode should be attached to an owner" observé lors du passage
+            // vers Ma boutique avec des contenus défilants.
+            NavHost(
+                navController = navController,
+                startDestination = Routes.SPLASH,
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { ExitTransition.None }
+            ) {
                 composable(Routes.SPLASH) {
                     SplashScreen(
                         sessionReady = viewModel.sessionReady.collectAsStateWithLifecycle().value,
