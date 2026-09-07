@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
@@ -324,18 +326,13 @@ private fun CreateShopForm(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) pickedLogoUri = uri }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
         Text(
             "Créer ma boutique",
             style = MaterialTheme.typography.headlineMedium,
@@ -445,8 +442,6 @@ private fun CreateShopForm(
             shape = RoundedCornerShape(14.dp)
         ) {
             Text("Créer la boutique")
-        }
-            }
         }
     }
 }

@@ -1,4 +1,13 @@
 
+-- ============================================================
+-- YAAR-APP / SUPABASE — ARCHITECTURE UNIQUE
+-- Version compatible avec Yaar-App 1.2.9
+-- Exécuter ce fichier UNE SEULE FOIS dans Supabase > SQL Editor.
+-- Ce script est idempotent : il peut être relancé sans recréer
+-- ni supprimer les données existantes.
+-- ============================================================
+
+
 -- Yaar-App / Supabase initial schema
 -- Run this entire script once in Supabase Dashboard -> SQL Editor.
 -- No Firebase data is migrated by this script.
@@ -512,3 +521,58 @@ using (
 );
 
 -- Done.
+
+
+-- ============================================================
+-- COMPATIBILITÉ DES PROFILS EXISTANTS
+-- ============================================================
+
+alter table public.users
+    add column if not exists email text;
+
+-- Pour les anciennes installations qui auraient ajouté email sans
+-- contrainte unique, cette protection évite les doublons.
+create unique index if not exists users_email_lower_unique_idx
+    on public.users (lower(email))
+    where email is not null and trim(email) <> '';
+
+
+-- Yaar-App / Supabase FINAL SETUP
+-- Run this once in the real Supabase SQL Editor (not Logs).
+-- Safe to run after Yaar-App-Supabase-Initial-Schema.sql.
+-- No Firebase data is migrated.
+
+-- Data API permissions. RLS remains the row-level security boundary.
+grant select on public.shops, public.products, public.product_images to anon, authenticated;
+grant select, insert, update, delete on public.users to authenticated;
+grant select, insert, update, delete on public.shops, public.products, public.product_images to authenticated;
+grant select, insert, update, delete on public.interests, public.ad_campaigns to authenticated;
+grant select, insert, update, delete on public.conversations, public.messages to authenticated;
+
+-- A shop owner may delete their own interest notifications during account deletion.
+drop policy if exists interests_owner_delete on public.interests;
+create policy interests_owner_delete
+on public.interests
+for delete to authenticated
+using (shop_owner_id = (select auth.uid()));
+
+-- Secure account deletion. No service_role key is ever embedded in Android.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    if (select auth.uid()) is null then
+        raise exception 'not_authenticated';
+    end if;
+
+    delete from auth.users
+    where id = (select auth.uid());
+end;
+$$;
+
+revoke all on function public.delete_my_account() from public;
+grant execute on function public.delete_my_account() to authenticated;
+
