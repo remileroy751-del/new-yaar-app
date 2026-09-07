@@ -36,6 +36,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Écran affiché à la place d'une fermeture brutale en cas d'erreur imprévue :
+             montre le détail technique exact (copiable) au lieu de faire disparaître
+             l'application sans explication. Voir YaarApplication.installCrashGuard(). -->
+        <activity
+            android:name=".CrashActivity"
+            android:exported="false"
+            android:theme="@style/Theme.YaarApp"
+            android:process=":crash_report" />
     </application>
 
 </manifest>

@@ -1,9 +1,10 @@
 package com.yaarapp.app
 
+import android.app.ActivityManager
 import android.app.Application
-import android.os.Looper
+import android.content.Context
+import android.content.Intent
 import android.util.Log
-import android.widget.Toast
 import com.yaarapp.app.data.YaarRepository
 import java.io.File
 import java.io.PrintWriter
@@ -16,87 +17,68 @@ class YaarApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         installCrashGuard()
+
+        // [CrashActivity] tourne volontairement dans un process séparé (":crash_report",
+        // voir AndroidManifest.xml) pour pouvoir survivre au crash du process principal.
+        // Application.onCreate() s'exécute alors aussi dans CE process séparé : il ne
+        // faut surtout pas y réinitialiser la base de données ni relancer la synchro
+        // Supabase, sous peine de reproduire le même plantage dans l'écran d'erreur
+        // lui-même. On saute donc l'initialisation lourde dans ce process précis.
+        if (isCrashReportProcess()) return
+
         repository = YaarRepository(this)
         repository.startRemoteSync()
     }
 
+    private fun isCrashReportProcess(): Boolean {
+        val pid = android.os.Process.myPid()
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        val processName = manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName
+        return processName?.endsWith(":crash_report") == true
+    }
+
     /**
      * ---------------------------------------------------------------------------------
-     * FILET DE SÉCURITÉ ANTI-FERMETURE BRUTALE ("Ma boutique" se fermait sans message)
+     * FILET DE SÉCURITÉ ANTI-FERMETURE BRUTALE ("Ma boutique" fermait l'app sans message)
      * ---------------------------------------------------------------------------------
-     * Un `Thread.setDefaultUncaughtExceptionHandler` classique ne suffit PAS à empêcher
-     * une fermeture d'application : quand une exception non interceptée traverse
-     * `Looper.loop()` sur le thread principal (ce qui est le cas de la quasi-totalité
-     * des plantages Compose/Vues), Android considère le thread principal comme terminé
-     * et tue le processus juste après avoir appelé ce handler — journaliser ne change
-     * rien à la fermeture.
+     * Toute exception non interceptée (Compose, coroutine mal protégée, etc.) est
+     * capturée ici avant qu'Android ne tue le processus. Au lieu de laisser l'application
+     * disparaître sans explication, on :
+     *  1. Journalise le détail complet (Logcat "YAAR_FATAL" + fichier crash_log.txt).
+     *  2. Ouvre [CrashActivity], qui tourne dans un PROCESS SÉPARÉ (":crash_report") et
+     *     affiche le message d'erreur exact à l'écran avec un bouton "Copier". C'est
+     *     nécessaire car le process principal (celui qui a planté) va être tué juste
+     *     après : seule une Activity dans un autre process peut survivre pour l'afficher.
+     *  3. Tue le process principal proprement, puis l'utilisateur peut relancer l'app
+     *     depuis l'écran d'erreur.
      *
-     * La technique ci-dessous (utilisée par plusieurs bibliothèques anti-crash Android
-     * connues, ex. "Cockroach") consiste à RELANCER nous-mêmes `Looper.loop()` depuis le
-     * handler d'exception, sur le thread principal. Cela réinjecte une nouvelle boucle de
-     * traitement des messages sur la même file d'attente : le thread principal ne
-     * "termine" donc jamais réellement, et Android ne tue pas le processus. L'écran en
-     * cours peut rester figé une fraction de seconde le temps de la recomposition
-     * suivante, mais l'application reste ouverte au lieu de se fermer brutalement.
-     *
-     * Chaque exception interceptée est :
-     *  - journalisée dans Logcat sous le tag "YAAR_FATAL" (visible avec :
-     *    adb logcat -s YAAR_FATAL)
-     *  - écrite dans un fichier texte persistant : /data/data/com.yaarapp.app/files/crash_log.txt
-     *    récupérable avec : adb shell run-as com.yaarapp.app cat files/crash_log.txt
-     *  - signalée à l'utilisateur par un court message, pour qu'il sache qu'un souci a
-     *    été rattrapé automatiquement au lieu de se retrouver sans explication.
-     *
-     * Ceci est un filet de sécurité, pas un correctif de la cause racine : si un problème
-     * revient souvent, consultez crash_log.txt (ou Logcat) pour en connaître la cause
-     * exacte et corriger le code concerné.
+     * Ceci est un filet de sécurité, pas un correctif de la cause racine : envoyez le
+     * texte copié depuis l'écran d'erreur pour obtenir une correction définitive.
      */
     private fun installCrashGuard() {
-        val mainThread = Looper.getMainLooper().thread
-
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            logCrash(thread.name, throwable)
-
-            if (thread === mainThread) {
-                // On relance la boucle principale au lieu de laisser le processus mourir.
-                // En cas de nouvelle exception, ce même handler sera réinvoqué : c'est
-                // volontaire (relance récursive), c'est ce qui permet de survivre à des
-                // plantages répétés sans fermer l'application.
-                try {
-                    Looper.loop()
-                } catch (_: Throwable) {
-                    // Sera recapturé par ce handler ; rien à faire ici.
-                }
-            } else {
-                // Un crash sur un thread secondaire non protégé reste fatal : on ne peut
-                // pas relancer un Looper qui n'existe pas sur ce thread. On tue proprement
-                // le processus dans ce seul cas (rare, car toute la logique métier passe
-                // par des coroutines déjà protégées par runCatching/.catch{}).
-                android.os.Process.killProcess(android.os.Process.myPid())
-            }
+            val stackTrace = logCrash(thread.name, throwable)
+            runCatching { launchCrashScreen(stackTrace) }
+            android.os.Process.killProcess(android.os.Process.myPid())
+            kotlin.system.exitProcess(10)
         }
     }
 
-    private fun logCrash(threadName: String, throwable: Throwable) {
+    private fun launchCrashScreen(stackTrace: String) {
+        val intent = Intent(this, CrashActivity::class.java).apply {
+            putExtra(CrashActivity.EXTRA_STACK_TRACE, stackTrace)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        startActivity(intent)
+    }
+
+    private fun logCrash(threadName: String, throwable: Throwable): String {
         val stackTrace = StringWriter().also { throwable.printStackTrace(PrintWriter(it)) }.toString()
+        val fullReport = "===== ${java.util.Date()} (thread: $threadName) =====\n$stackTrace"
         Log.e("YAAR_FATAL", "Exception non interceptée sur le thread \"$threadName\" :\n$stackTrace")
-
-        runCatching {
-            File(filesDir, "crash_log.txt").appendText(
-                "\n\n===== ${java.util.Date()} (thread: $threadName) =====\n$stackTrace"
-            )
-        }
-
-        if (threadName == Looper.getMainLooper().thread.name) {
-            runCatching {
-                android.os.Handler(Looper.getMainLooper()).post {
-                    Toast.makeText(
-                        this,
-                        "Un problème inattendu a été évité automatiquement. Réessayez l'action.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
+        runCatching { File(filesDir, "crash_log.txt").appendText("\n\n$fullReport") }
+        return fullReport
     }
 }
