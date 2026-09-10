@@ -2,6 +2,7 @@ package com.yaarapp.app.data
 
 import com.yaarapp.app.supabase.SupabaseModule
 import io.github.jan.supabase.functions.functions
+import io.ktor.client.call.body
 import kotlinx.serialization.Serializable
 
 @Serializable
