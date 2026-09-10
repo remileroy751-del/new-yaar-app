@@ -54,7 +54,7 @@ fun ProductDetailScreen(
     viewModel: YaarViewModel,
     onBack: () -> Unit,
     onViewShop: (Int) -> Unit = {},
-    onChatSupplier: () -> Unit = {}
+    onChatSupplier: (Product, Shop) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var product by remember { mutableStateOf<Product?>(null) }
@@ -161,7 +161,7 @@ fun ProductDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = onChatSupplier,
+                        onClick = { shop?.let { onChatSupplier(p, it) } },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(14.dp)
                     ) { Text("Discuter avec le fournisseur ici") }

@@ -13,6 +13,8 @@ object Routes {
     const val PRODUCT_DETAIL = "product/{productId}"
     const val CART = "cart"
     const val CHAT = "chat/{productId}"
+    const val CONVERSATIONS = "conversations"
+    const val CONVERSATION = "conversation/{conversationId}"
 
     const val MY_SHOP = "my_shop"                   // "Ma boutique"
     const val CREATE_SHOP = "create_shop"
@@ -22,7 +24,7 @@ object Routes {
 
     const val SELECT_PRODUCT_TO_PROMOTE = "select_product_to_promote"
     const val CONFIGURE_AD_CAMPAIGN = "configure_ad_campaign"
-    const val KKIAPAY_CHECKOUT = "kkiapay_checkout"
+    const val PAYDUNYA_CHECKOUT = "paydunya_checkout"
 
     const val MY_ADS = "my_ads"                     // "Ma Publicité"
     const val CERTIFY_SHOP = "certify_shop"          // "Certifié ma boutique"
@@ -34,4 +36,5 @@ object Routes {
     fun productDetail(productId: Int) = "product/$productId"
     fun shopPublic(shopId: Int) = "shop_public/$shopId"
     fun chat(productId: Int) = "chat/$productId"
+    fun conversation(id: String) = "conversation/$id"
 }

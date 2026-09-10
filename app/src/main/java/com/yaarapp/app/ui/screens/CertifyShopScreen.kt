@@ -49,7 +49,7 @@ import com.yaarapp.app.viewmodel.YaarViewModel
 /**
  * "Certifié ma boutique" : le vendeur envoie la photo recto puis verso de sa pièce
  * d'identité, puis paie l'étude du dossier (2 000 FCFA par mois) via
- * Kkiapay. Le statut passe alors à "en cours d'étude" (voir CertificationStatus).
+ * PayDunya. Le statut passe alors à "en cours d'étude" (voir CertificationStatus).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

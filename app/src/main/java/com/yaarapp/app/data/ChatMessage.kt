@@ -16,5 +16,11 @@ data class ChatConversation(
     val productName: String,
     val productPrice: Double,
     val shopName: String,
-    val participants: List<String>
+    val participants: List<String>,
+    val buyerName: String = "",
+    val sellerName: String = "",
+    val buyerWhatsappNumber: String = "",
+    val sellerWhatsappNumber: String = "",
+    val lastMessage: String = "",
+    val updatedAt: Long = System.currentTimeMillis()
 )

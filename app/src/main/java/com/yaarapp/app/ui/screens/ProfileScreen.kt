@@ -2,6 +2,7 @@ package com.yaarapp.app.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -44,6 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +75,7 @@ fun ProfileScreen(
     var deleting by remember { mutableStateOf(false) }
     var deleteError by remember { mutableStateOf<String?>(null) }
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -100,6 +107,28 @@ fun ProfileScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
+
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Suivez-nous sur nos réseaux", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text("Restez informé des nouveautés de Yaar-App.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+                    SocialFollowButton(
+                        label = "Suivez-nous sur Facebook",
+                        badge = "f",
+                        badgeColor = Color(0xFF1877F2),
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.facebook.com/share/1BdYkU3ecJ/"))) }
+                    )
+                    SocialFollowButton(
+                        label = "Suivez-nous sur WhatsApp",
+                        badge = "◔",
+                        badgeColor = Color(0xFF25D366),
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://whatsapp.com/channel/0029VbDjTyb5K3zZvfbpMz0q"))) }
+                    )
+                }
+            }
 
             Card(
                 modifier = Modifier
@@ -275,6 +304,23 @@ fun ProfileScreen(
                 dismissButton = { TextButton(enabled = !deleting, onClick = { showFinalDialog = false }) { Text("Annuler") } }
             )
         }
+    }
+}
+
+@Composable
+private fun SocialFollowButton(
+    label: String,
+    badge: String,
+    badgeColor: Color,
+    onClick: () -> Unit
+) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) {
+        Surface(shape = androidx.compose.foundation.shape.CircleShape, color = badgeColor, modifier = Modifier.size(30.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(badge, color = Color.White, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+        Text(label, modifier = Modifier.padding(start = 10.dp), fontWeight = FontWeight.SemiBold)
     }
 }
 

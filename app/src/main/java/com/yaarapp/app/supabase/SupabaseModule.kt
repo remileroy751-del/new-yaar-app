@@ -5,6 +5,7 @@ import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.functions.Functions
 
 /** Configuration Supabase de Yaar-App. La publishable key est conçue pour être embarquée côté mobile. */
 object SupabaseModule {
@@ -21,6 +22,7 @@ object SupabaseModule {
         }
         install(Postgrest)
         install(Storage)
+        install(Functions)
         install(Realtime)
     }
 }

@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
 /**
  * Étape 2 de "Promouvoir mes produits" : le vendeur règle deux curseurs — le nombre
  * d'expositions souhaité et le nombre de jours de la campagne — et le prix se calcule
- * automatiquement (20 FCFA par exposition), avant l'ouverture du paiement Kkiapay.
+ * automatiquement (20 FCFA par exposition), avant l'ouverture du paiement PayDunya.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -1,6 +1,8 @@
 package com.yaarapp.app.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import com.yaarapp.app.supabase.SupabaseModule
@@ -52,8 +54,27 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
     private var started = false
 
     fun clearLastSyncEvent() { _lastSyncEvent.value = null }
-    private fun success(message: String) { Log.i(TAG, message); _lastSyncEvent.value = "✅ $message" }
-    fun reportFailure(message: String) { Log.w(TAG, message); _lastSyncEvent.value = "❌ $message" }
+
+    /** Les détails techniques restent dans Logcat ; l'utilisateur ne voit qu'un statut court. */
+    private fun success(message: String) { Log.i(TAG, message) }
+
+    fun reportFailure(message: String) {
+        Log.w(TAG, message)
+        _lastSyncEvent.value = if (isOffline()) {
+            "Vous êtes hors ligne"
+        } else {
+            "Connexion indisponible. Réessayez."
+        }
+    }
+
+    private fun isOffline(): Boolean {
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return true
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return true
+        return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+            !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
 
     fun normalizeWhatsapp(whatsappNumber: String): String {
         var digits = whatsappNumber.filter(Char::isDigit)
@@ -164,9 +185,9 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         syncScope.launch {
             try {
                 refreshPublicData()
-                success("Connexion Supabase OK — synchronisation démarrée.")
+                _lastSyncEvent.value = "Connexion réussie"
             } catch (e: Exception) {
-                reportFailure("Connexion Supabase impossible : ${e.message ?: "erreur réseau"}")
+                reportFailure(e.message ?: "erreur réseau")
             }
             while (true) {
                 delay(POLL_INTERVAL_MS)
@@ -288,7 +309,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
             filter { eq("owner_uid", uid) }
         }.decodeList<ProductRow>()
         for (row in products) applyProduct(row)
-        success("Compte et données Supabase synchronisés.")
+        success("Compte et données synchronisés.")
         return cloudUser
     }
 
@@ -356,7 +377,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         return updated
     }
 
-    fun syncProduct(product: Product) { syncScope.launch { runCatching { syncProductNow(product); success("Produit \"${product.name}\" synchronisé.") }.onFailure { reportFailure("Échec produit : ${it.message}") } } }
+    fun syncProduct(product: Product) { syncScope.launch { runCatching { syncProductNow(product); success("Produit synchronisé.") }.onFailure { reportFailure("Échec produit : ${it.message}") } } }
 
     fun deleteProductRemote(product: Product) {
         val id = product.remoteId ?: return
@@ -370,31 +391,48 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         }
     }
 
-    suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) {
+    suspend fun ensureConversation(product: Product, shop: Shop, buyer: User): String {
         val buyerUid = buyer.firebaseUid ?: currentUid() ?: throw IllegalStateException("Compte Supabase indisponible")
         val sellerUid = shop.ownerUid ?: product.ownerUid ?: throw IllegalStateException("Fournisseur indisponible")
         require(buyerUid != sellerUid) { "Vous ne pouvez pas démarrer une discussion avec votre propre boutique." }
         val conversationId = listOf(buyerUid, sellerUid, product.remoteId ?: product.id.toString()).joinToString("_")
+        val existing = runCatching { client.from("conversations").select { filter { eq("id", conversationId) } }.decodeSingle<ConversationRow>() }.getOrNull()
         client.from("conversations").upsert(
             ConversationRow(
-                id = conversationId,
-                buyerUid = buyerUid,
-                sellerUid = sellerUid,
-                productId = product.remoteId,
-                productName = product.name,
-                productPrice = product.price,
-                shopName = shop.name,
-                participants = listOf(buyerUid, sellerUid)
+                id = conversationId, buyerUid = buyerUid, sellerUid = sellerUid, productId = product.remoteId,
+                productName = product.name, productPrice = product.price, shopName = shop.name, participants = listOf(buyerUid, sellerUid),
+                buyerName = existing?.buyerName ?: buyer.firstName, sellerName = existing?.sellerName ?: shop.name,
+                buyerWhatsappNumber = existing?.buyerWhatsappNumber ?: buyer.whatsappNumber, sellerWhatsappNumber = existing?.sellerWhatsappNumber ?: shop.whatsappNumber,
+                lastMessage = existing?.lastMessage ?: ""
             )
         ) { onConflict = "id" }
-        client.from("messages").insert(
-            MessageRow(
-                conversationId = conversationId,
-                senderUid = buyerUid,
-                senderName = buyer.firstName,
-                text = text.trim()
-            )
-        )
+        return conversationId
+    }
+
+    suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) {
+        val conversationId = ensureConversation(product, shop, buyer)
+        client.from("messages").insert(MessageRow(conversationId = conversationId, senderUid = buyer.firebaseUid ?: currentUid() ?: error("Compte Supabase indisponible"), senderName = buyer.firstName, text = text.trim()))
+        client.from("conversations").update(ConversationUpdate(lastMessage = text.trim(), updatedAt = Instant.now().toString())) { filter { eq("id", conversationId) } }
+    }
+
+    suspend fun sendChatMessageInConversation(conversationId: String, sender: User, text: String) {
+        val uid = sender.firebaseUid ?: currentUid() ?: throw IllegalStateException("Compte Supabase indisponible")
+        val conversation = client.from("conversations").select { filter { eq("id", conversationId) } }.decodeSingle<ConversationRow>()
+        require(conversation.participants.contains(uid)) { "Vous ne participez pas à cette discussion." }
+        client.from("messages").insert(MessageRow(conversationId = conversationId, senderUid = uid, senderName = sender.firstName, text = text.trim()))
+        client.from("conversations").update(ConversationUpdate(lastMessage = text.trim(), updatedAt = Instant.now().toString())) { filter { eq("id", conversationId) } }
+    }
+
+    fun observeConversations(uid: String): Flow<List<ChatConversation>> = flow {
+        while (true) {
+            val rows = runCatching {
+                val asBuyer = client.from("conversations").select { filter { eq("buyer_uid", uid) } }.decodeList<ConversationRow>()
+                val asSeller = client.from("conversations").select { filter { eq("seller_uid", uid) } }.decodeList<ConversationRow>()
+                (asBuyer + asSeller).distinctBy { it.id }.sortedByDescending { it.updatedAt.toEpochMillis() }
+            }.getOrDefault(emptyList())
+            emit(rows.map { it.toDomain() })
+            delay(3_000L)
+        }
     }
 
     fun observeChatMessages(conversationId: String): Flow<List<ChatMessage>> = flow {
@@ -406,6 +444,16 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
             }.getOrDefault(emptyList())
             emit(rows.map { ChatMessage(it.id, it.senderUid, it.senderName, it.text, it.createdAt.toEpochMillis()) })
             delay(2_000L)
+        }
+    }
+
+    fun observeConversation(conversationId: String): Flow<ChatConversation?> = flow {
+        while (true) {
+            val row = runCatching {
+                client.from("conversations").select { filter { eq("id", conversationId) } }.decodeSingle<ConversationRow>()
+            }.getOrNull()
+            emit(row?.toDomain())
+            delay(3_000L)
         }
     }
 
@@ -584,7 +632,30 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
     @Serializable data class ProductImageRow(val id: String, @SerialName("product_id") val productId: String, @SerialName("owner_uid") val ownerUid: String, @SerialName("storage_path") val storagePath: String, @SerialName("public_url") val publicUrl: String?, @SerialName("sort_order") val sortOrder: Int)
     @Serializable data class InterestRow(val id: String, @SerialName("product_id") val productId: String, @SerialName("product_name") val productName: String, @SerialName("product_image_url") val productImageUrl: String, @SerialName("shop_id") val shopId: String, @SerialName("shop_owner_id") val shopOwnerId: String, @SerialName("buyer_id") val buyerId: String, @SerialName("buyer_first_name") val buyerFirstName: String, @SerialName("buyer_whatsapp_number") val buyerWhatsappNumber: String, val status: String, @SerialName("is_read") val isRead: Boolean, @SerialName("created_at") val createdAt: String = Instant.now().toString())
     @Serializable data class AdCampaignRow(val id: String, @SerialName("product_id") val productId: String, @SerialName("product_name") val productName: String, @SerialName("shop_id") val shopId: String, @SerialName("owner_uid") val ownerUid: String, @SerialName("total_expositions") val totalExpositions: Int, @SerialName("remaining_expositions") val remainingExpositions: Int, @SerialName("duration_days") val durationDays: Int, @SerialName("started_at") val startedAt: String, @SerialName("ends_at") val endsAt: String, @SerialName("price_fcfa") val priceFcfa: Int, @SerialName("is_active") val isActive: Boolean)
-    @Serializable data class ConversationRow(val id: String, @SerialName("buyer_uid") val buyerUid: String, @SerialName("seller_uid") val sellerUid: String, @SerialName("product_id") val productId: String?, @SerialName("product_name") val productName: String, @SerialName("product_price") val productPrice: Double, @SerialName("shop_name") val shopName: String, val participants: List<String>, @SerialName("created_at") val createdAt: String? = null, @SerialName("updated_at") val updatedAt: String? = null)
+    @Serializable data class ConversationRow(
+        val id: String,
+        @SerialName("buyer_uid") val buyerUid: String,
+        @SerialName("seller_uid") val sellerUid: String,
+        @SerialName("product_id") val productId: String?,
+        @SerialName("product_name") val productName: String,
+        @SerialName("product_price") val productPrice: Double,
+        @SerialName("shop_name") val shopName: String,
+        val participants: List<String>,
+        @SerialName("buyer_name") val buyerName: String = "",
+        @SerialName("seller_name") val sellerName: String = "",
+        @SerialName("buyer_whatsapp_number") val buyerWhatsappNumber: String = "",
+        @SerialName("seller_whatsapp_number") val sellerWhatsappNumber: String = "",
+        @SerialName("last_message") val lastMessage: String = "",
+        @SerialName("created_at") val createdAt: String? = null,
+        @SerialName("updated_at") val updatedAt: String? = null
+    ) {
+        fun toDomain() = ChatConversation(id, buyerUid, sellerUid, productId, productName, productPrice, shopName, participants, buyerName, sellerName, buyerWhatsappNumber, sellerWhatsappNumber, lastMessage, updatedAt?.toEpochMillis() ?: System.currentTimeMillis())
+    }
+    @Serializable data class ConversationUpdate(
+        @SerialName("last_message") val lastMessage: String,
+        @SerialName("updated_at") val updatedAt: String
+    )
+
     @Serializable data class MessageRow(val id: String = "", @SerialName("conversation_id") val conversationId: String, @SerialName("sender_uid") val senderUid: String, @SerialName("sender_name") val senderName: String, val text: String, @SerialName("created_at") val createdAt: String = Instant.now().toString())
 
 

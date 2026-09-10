@@ -1,4 +1,4 @@
-name: Android Build
+name: Yaar-App Android Build
 
 on:
   push:
@@ -7,11 +7,19 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: yaar-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout Yaar-App
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -19,22 +27,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Setup Android SDK 36
+      - name: Set up Android SDK 36
         uses: android-actions/setup-android@v3
-      - name: Install Android API 36
+
+      - name: Install Android SDK 36
         run: sdkmanager "platforms;android-36"
 
-      - name: Setup Gradle 8.13
+      - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
-      - name: Run unit tests and build debug APK
+      - name: Run unit tests and compile debug APK
         run: gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
 
-      - name: Upload debug APK
+      - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
           name: yaar-app-debug
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

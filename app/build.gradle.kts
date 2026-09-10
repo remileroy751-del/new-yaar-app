@@ -19,8 +19,8 @@ android {
         applicationId = "com.yaarapp.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.2.9"
+        versionCode = 21
+        versionName = "1.3.1"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -106,6 +106,7 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:storage-kt")
+    implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.ktor:ktor-client-android:3.4.3")
     implementation("io.ktor:ktor-client-core:3.4.3")

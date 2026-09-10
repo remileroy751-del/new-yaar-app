@@ -1,27 +1,21 @@
-
 -- ============================================================
--- YAAR-APP / SUPABASE — ARCHITECTURE UNIQUE
--- Version compatible avec Yaar-App 1.2.9
--- Exécuter ce fichier UNE SEULE FOIS dans Supabase > SQL Editor.
--- Ce script est idempotent : il peut être relancé sans recréer
--- ni supprimer les données existantes.
+-- YAAR-APP — SUPABASE ALL-IN-ONE SQL
+-- VERSION 1.3.0+
 -- ============================================================
-
-
--- Yaar-App / Supabase initial schema
--- Run this entire script once in Supabase Dashboard -> SQL Editor.
--- No Firebase data is migrated by this script.
+-- À exécuter dans Supabase SQL Editor.
+-- Le script est conçu pour être relançable sans supprimer les données.
+-- Aucun secret PayDunya ne doit être placé dans ce fichier.
 
 create extension if not exists pgcrypto;
 
 -- =========================
--- 1. PUBLIC TABLES
+-- 1. TABLES PRINCIPALES
 -- =========================
 
 create table if not exists public.users (
     id uuid primary key references auth.users(id) on delete cascade,
     first_name text not null,
-    email text not null unique,
+    email text,
     country text not null check (country in (
         'BENIN','BURKINA_FASO','COTE_DIVOIRE','MALI','NIGER','SENEGAL','TOGO'
     )),
@@ -30,6 +24,11 @@ create table if not exists public.users (
     notifications_enabled boolean not null default true,
     created_at timestamptz not null default now()
 );
+
+alter table public.users add column if not exists email text;
+create unique index if not exists users_email_lower_unique_idx
+    on public.users (lower(email))
+    where email is not null and trim(email) <> '';
 
 create table if not exists public.shops (
     id uuid primary key default gen_random_uuid(),
@@ -58,8 +57,7 @@ create table if not exists public.shops (
     created_at timestamptz not null default now()
 );
 
-create unique index if not exists shops_one_per_owner_idx
-    on public.shops(owner_uid);
+create unique index if not exists shops_one_per_owner_idx on public.shops(owner_uid);
 
 create table if not exists public.products (
     id uuid primary key default gen_random_uuid(),
@@ -97,9 +95,7 @@ create table if not exists public.product_images (
     sort_order integer not null default 0,
     created_at timestamptz not null default now()
 );
-
-create index if not exists product_images_product_idx
-    on public.product_images(product_id);
+create index if not exists product_images_product_idx on public.product_images(product_id);
 
 create table if not exists public.interests (
     id uuid primary key default gen_random_uuid(),
@@ -111,17 +107,12 @@ create table if not exists public.interests (
     buyer_id uuid not null references auth.users(id) on delete cascade,
     buyer_first_name text not null,
     buyer_whatsapp_number text not null,
-    status text not null default 'PENDING' check (
-        status in ('PENDING','AVAILABLE','UNAVAILABLE')
-    ),
+    status text not null default 'PENDING' check (status in ('PENDING','AVAILABLE','UNAVAILABLE')),
     is_read boolean not null default false,
     created_at timestamptz not null default now()
 );
-
-create index if not exists interests_shop_owner_idx
-    on public.interests(shop_owner_id, created_at desc);
-create index if not exists interests_buyer_idx
-    on public.interests(buyer_id, created_at desc);
+create index if not exists interests_shop_owner_idx on public.interests(shop_owner_id, created_at desc);
+create index if not exists interests_buyer_idx on public.interests(buyer_id, created_at desc);
 
 create table if not exists public.ad_campaigns (
     id uuid primary key default gen_random_uuid(),
@@ -137,11 +128,12 @@ create table if not exists public.ad_campaigns (
     price_fcfa integer not null check (price_fcfa >= 0),
     is_active boolean not null default true
 );
+create index if not exists ad_campaigns_owner_idx on public.ad_campaigns(owner_uid, is_active);
+create index if not exists ad_campaigns_product_idx on public.ad_campaigns(product_id);
 
-create index if not exists ad_campaigns_owner_idx
-    on public.ad_campaigns(owner_uid, is_active);
-create index if not exists ad_campaigns_product_idx
-    on public.ad_campaigns(product_id);
+-- =========================
+-- 2. DISCUSSIONS
+-- =========================
 
 create table if not exists public.conversations (
     id text primary key,
@@ -152,14 +144,24 @@ create table if not exists public.conversations (
     product_price numeric(14,2) not null default 0,
     shop_name text not null,
     participants uuid[] not null,
+    buyer_name text not null default '',
+    seller_name text not null default '',
+    buyer_whatsapp_number text not null default '',
+    seller_whatsapp_number text not null default '',
+    last_message text not null default '',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
 
-create index if not exists conversations_buyer_idx
-    on public.conversations(buyer_uid, updated_at desc);
-create index if not exists conversations_seller_idx
-    on public.conversations(seller_uid, updated_at desc);
+-- Compatibilité avec une installation antérieure de la table conversations.
+alter table public.conversations add column if not exists buyer_name text not null default '';
+alter table public.conversations add column if not exists seller_name text not null default '';
+alter table public.conversations add column if not exists buyer_whatsapp_number text not null default '';
+alter table public.conversations add column if not exists seller_whatsapp_number text not null default '';
+alter table public.conversations add column if not exists last_message text not null default '';
+
+create index if not exists conversations_buyer_idx on public.conversations(buyer_uid, updated_at desc);
+create index if not exists conversations_seller_idx on public.conversations(seller_uid, updated_at desc);
 
 create table if not exists public.messages (
     id uuid primary key default gen_random_uuid(),
@@ -169,12 +171,33 @@ create table if not exists public.messages (
     text text not null,
     created_at timestamptz not null default now()
 );
-
-create index if not exists messages_conversation_idx
-    on public.messages(conversation_id, created_at);
+create index if not exists messages_conversation_idx on public.messages(conversation_id, created_at);
 
 -- =========================
--- 2. UPDATED_AT TRIGGER
+-- 3. PAIEMENTS PAYDUNYA
+-- =========================
+
+create table if not exists public.payment_transactions (
+    id uuid primary key default gen_random_uuid(),
+    user_uid uuid not null references auth.users(id) on delete cascade,
+    purpose text not null check (purpose in ('PRODUCT_CAPACITY','PRODUCT_PROMOTION','SHOP_CERTIFICATION')),
+    amount_fcfa integer not null check (amount_fcfa > 0),
+    description text not null default '',
+    product_id uuid references public.products(id) on delete set null,
+    shop_id uuid references public.shops(id) on delete set null,
+    expositions integer,
+    duration_days integer,
+    invoice_token text unique,
+    checkout_url text,
+    status text not null default 'PENDING' check (status in ('PENDING','COMPLETED','CANCELLED','FAILED')),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+create index if not exists payment_transactions_user_idx on public.payment_transactions(user_uid, created_at desc);
+create index if not exists payment_transactions_status_idx on public.payment_transactions(status, created_at desc);
+
+-- =========================
+-- 4. UPDATED_AT
 -- =========================
 
 create or replace function public.set_updated_at()
@@ -192,8 +215,13 @@ create trigger conversations_set_updated_at
 before update on public.conversations
 for each row execute function public.set_updated_at();
 
+drop trigger if exists payment_transactions_set_updated_at on public.payment_transactions;
+create trigger payment_transactions_set_updated_at
+before update on public.payment_transactions
+for each row execute function public.set_updated_at();
+
 -- =========================
--- 3. RLS
+-- 5. RLS
 -- =========================
 
 alter table public.users enable row level security;
@@ -204,359 +232,130 @@ alter table public.interests enable row level security;
 alter table public.ad_campaigns enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
+alter table public.payment_transactions enable row level security;
 
--- Users: each authenticated user owns their profile.
 drop policy if exists users_select_own on public.users;
-create policy users_select_own on public.users
-for select to authenticated
-using (id = (select auth.uid()));
-
+create policy users_select_own on public.users for select to authenticated using (id = (select auth.uid()));
 drop policy if exists users_insert_own on public.users;
-create policy users_insert_own on public.users
-for insert to authenticated
-with check (id = (select auth.uid()));
-
+create policy users_insert_own on public.users for insert to authenticated with check (id = (select auth.uid()));
 drop policy if exists users_update_own on public.users;
-create policy users_update_own on public.users
-for update to authenticated
-using (id = (select auth.uid()))
-with check (id = (select auth.uid()));
-
+create policy users_update_own on public.users for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 drop policy if exists users_delete_own on public.users;
-create policy users_delete_own on public.users
-for delete to authenticated
-using (id = (select auth.uid()));
+create policy users_delete_own on public.users for delete to authenticated using (id = (select auth.uid()));
 
--- Shops: public can read shops; only owner can write.
 drop policy if exists shops_public_select on public.shops;
-create policy shops_public_select on public.shops
-for select to anon, authenticated
-using (true);
-
+create policy shops_public_select on public.shops for select to anon, authenticated using (true);
 drop policy if exists shops_insert_own on public.shops;
-create policy shops_insert_own on public.shops
-for insert to authenticated
-with check (owner_uid = (select auth.uid()));
-
+create policy shops_insert_own on public.shops for insert to authenticated with check (owner_uid = (select auth.uid()));
 drop policy if exists shops_update_own on public.shops;
-create policy shops_update_own on public.shops
-for update to authenticated
-using (owner_uid = (select auth.uid()))
-with check (owner_uid = (select auth.uid()));
-
+create policy shops_update_own on public.shops for update to authenticated using (owner_uid = (select auth.uid())) with check (owner_uid = (select auth.uid()));
 drop policy if exists shops_delete_own on public.shops;
-create policy shops_delete_own on public.shops
-for delete to authenticated
-using (owner_uid = (select auth.uid()));
+create policy shops_delete_own on public.shops for delete to authenticated using (owner_uid = (select auth.uid()));
 
--- Products: active products public; owner can see/manage all own products.
 drop policy if exists products_public_select on public.products;
-create policy products_public_select on public.products
-for select to anon, authenticated
-using (is_active = true or owner_uid = (select auth.uid()));
-
+create policy products_public_select on public.products for select to anon, authenticated using (is_active = true or owner_uid = (select auth.uid()));
 drop policy if exists products_insert_own on public.products;
-create policy products_insert_own on public.products
-for insert to authenticated
-with check (
-    owner_uid = (select auth.uid())
-    and exists (
-        select 1 from public.shops s
-        where s.id = shop_id and s.owner_uid = (select auth.uid())
-    )
-);
-
+create policy products_insert_own on public.products for insert to authenticated with check (owner_uid = (select auth.uid()) and exists (select 1 from public.shops s where s.id = shop_id and s.owner_uid = (select auth.uid())));
 drop policy if exists products_update_own on public.products;
-create policy products_update_own on public.products
-for update to authenticated
-using (owner_uid = (select auth.uid()))
-with check (
-    owner_uid = (select auth.uid())
-    and exists (
-        select 1 from public.shops s
-        where s.id = shop_id and s.owner_uid = (select auth.uid())
-    )
-);
-
+create policy products_update_own on public.products for update to authenticated using (owner_uid = (select auth.uid())) with check (owner_uid = (select auth.uid()) and exists (select 1 from public.shops s where s.id = shop_id and s.owner_uid = (select auth.uid())));
 drop policy if exists products_delete_own on public.products;
-create policy products_delete_own on public.products
-for delete to authenticated
-using (owner_uid = (select auth.uid()));
+create policy products_delete_own on public.products for delete to authenticated using (owner_uid = (select auth.uid()));
 
--- Product images: public read; owner writes.
 drop policy if exists product_images_public_select on public.product_images;
-create policy product_images_public_select on public.product_images
-for select to anon, authenticated
-using (true);
-
+create policy product_images_public_select on public.product_images for select to anon, authenticated using (true);
 drop policy if exists product_images_insert_own on public.product_images;
-create policy product_images_insert_own on public.product_images
-for insert to authenticated
-with check (owner_uid = (select auth.uid()));
-
+create policy product_images_insert_own on public.product_images for insert to authenticated with check (owner_uid = (select auth.uid()));
 drop policy if exists product_images_update_own on public.product_images;
-create policy product_images_update_own on public.product_images
-for update to authenticated
-using (owner_uid = (select auth.uid()))
-with check (owner_uid = (select auth.uid()));
-
+create policy product_images_update_own on public.product_images for update to authenticated using (owner_uid = (select auth.uid())) with check (owner_uid = (select auth.uid()));
 drop policy if exists product_images_delete_own on public.product_images;
-create policy product_images_delete_own on public.product_images
-for delete to authenticated
-using (owner_uid = (select auth.uid()));
+create policy product_images_delete_own on public.product_images for delete to authenticated using (owner_uid = (select auth.uid()));
 
--- Interests: buyer and shop owner can read; buyer creates; owner updates status/read.
 drop policy if exists interests_participants_select on public.interests;
-create policy interests_participants_select on public.interests
-for select to authenticated
-using (
-    buyer_id = (select auth.uid())
-    or shop_owner_id = (select auth.uid())
-);
-
+create policy interests_participants_select on public.interests for select to authenticated using (buyer_id = (select auth.uid()) or shop_owner_id = (select auth.uid()));
 drop policy if exists interests_buyer_insert on public.interests;
-create policy interests_buyer_insert on public.interests
-for insert to authenticated
-with check (buyer_id = (select auth.uid()));
-
+create policy interests_buyer_insert on public.interests for insert to authenticated with check (buyer_id = (select auth.uid()));
 drop policy if exists interests_owner_update on public.interests;
-create policy interests_owner_update on public.interests
-for update to authenticated
-using (shop_owner_id = (select auth.uid()))
-with check (shop_owner_id = (select auth.uid()));
-
+create policy interests_owner_update on public.interests for update to authenticated using (shop_owner_id = (select auth.uid())) with check (shop_owner_id = (select auth.uid()));
 drop policy if exists interests_buyer_delete on public.interests;
-create policy interests_buyer_delete on public.interests
-for delete to authenticated
-using (buyer_id = (select auth.uid()));
+create policy interests_buyer_delete on public.interests for delete to authenticated using (buyer_id = (select auth.uid()));
+drop policy if exists interests_owner_delete on public.interests;
+create policy interests_owner_delete on public.interests for delete to authenticated using (shop_owner_id = (select auth.uid()));
 
--- Ad campaigns: owner only.
 drop policy if exists ad_campaigns_owner_select on public.ad_campaigns;
-create policy ad_campaigns_owner_select on public.ad_campaigns
-for select to authenticated
-using (owner_uid = (select auth.uid()));
-
+create policy ad_campaigns_owner_select on public.ad_campaigns for select to authenticated using (owner_uid = (select auth.uid()));
 drop policy if exists ad_campaigns_owner_insert on public.ad_campaigns;
-create policy ad_campaigns_owner_insert on public.ad_campaigns
-for insert to authenticated
-with check (owner_uid = (select auth.uid()));
-
+create policy ad_campaigns_owner_insert on public.ad_campaigns for insert to authenticated with check (owner_uid = (select auth.uid()));
 drop policy if exists ad_campaigns_owner_update on public.ad_campaigns;
-create policy ad_campaigns_owner_update on public.ad_campaigns
-for update to authenticated
-using (owner_uid = (select auth.uid()))
-with check (owner_uid = (select auth.uid()));
-
+create policy ad_campaigns_owner_update on public.ad_campaigns for update to authenticated using (owner_uid = (select auth.uid())) with check (owner_uid = (select auth.uid()));
 drop policy if exists ad_campaigns_owner_delete on public.ad_campaigns;
-create policy ad_campaigns_owner_delete on public.ad_campaigns
-for delete to authenticated
-using (owner_uid = (select auth.uid()));
+create policy ad_campaigns_owner_delete on public.ad_campaigns for delete to authenticated using (owner_uid = (select auth.uid()));
 
--- Conversations: only participants.
 drop policy if exists conversations_participant_select on public.conversations;
-create policy conversations_participant_select on public.conversations
-for select to authenticated
-using ((select auth.uid()) = any(participants));
-
+create policy conversations_participant_select on public.conversations for select to authenticated using ((select auth.uid()) = any(participants));
 drop policy if exists conversations_participant_insert on public.conversations;
-create policy conversations_participant_insert on public.conversations
-for insert to authenticated
-with check ((select auth.uid()) = any(participants));
-
+create policy conversations_participant_insert on public.conversations for insert to authenticated with check ((select auth.uid()) = any(participants));
 drop policy if exists conversations_participant_update on public.conversations;
-create policy conversations_participant_update on public.conversations
-for update to authenticated
-using ((select auth.uid()) = any(participants))
-with check ((select auth.uid()) = any(participants));
-
+create policy conversations_participant_update on public.conversations for update to authenticated using ((select auth.uid()) = any(participants)) with check ((select auth.uid()) = any(participants));
 drop policy if exists conversations_participant_delete on public.conversations;
-create policy conversations_participant_delete on public.conversations
-for delete to authenticated
-using ((select auth.uid()) = any(participants));
+create policy conversations_participant_delete on public.conversations for delete to authenticated using ((select auth.uid()) = any(participants));
 
--- Messages: only conversation participants.
 drop policy if exists messages_participant_select on public.messages;
-create policy messages_participant_select on public.messages
-for select to authenticated
-using (
-    exists (
-        select 1 from public.conversations c
-        where c.id = conversation_id
-        and (select auth.uid()) = any(c.participants)
-    )
-);
-
+create policy messages_participant_select on public.messages for select to authenticated using (exists (select 1 from public.conversations c where c.id = conversation_id and (select auth.uid()) = any(c.participants)));
 drop policy if exists messages_participant_insert on public.messages;
-create policy messages_participant_insert on public.messages
-for insert to authenticated
-with check (
-    sender_uid = (select auth.uid())
-    and exists (
-        select 1 from public.conversations c
-        where c.id = conversation_id
-        and (select auth.uid()) = any(c.participants)
-    )
-);
-
+create policy messages_participant_insert on public.messages for insert to authenticated with check (sender_uid = (select auth.uid()) and exists (select 1 from public.conversations c where c.id = conversation_id and (select auth.uid()) = any(c.participants)));
 drop policy if exists messages_sender_delete on public.messages;
-create policy messages_sender_delete on public.messages
-for delete to authenticated
-using (sender_uid = (select auth.uid()));
+create policy messages_sender_delete on public.messages for delete to authenticated using (sender_uid = (select auth.uid()));
+
+-- Le paiement est créé et modifié par les Edge Functions avec service_role.
+drop policy if exists payment_transactions_select_own on public.payment_transactions;
+create policy payment_transactions_select_own on public.payment_transactions for select to authenticated using (user_uid = (select auth.uid()));
 
 -- =========================
--- 4. STORAGE BUCKETS
+-- 6. STORAGE
 -- =========================
 
 insert into storage.buckets (id, name, public)
-values
-    ('products', 'products', true),
-    ('shops', 'shops', true),
-    ('id_cards', 'id_cards', false)
-on conflict (id) do update
-set public = excluded.public;
+values ('products','products',true), ('shops','shops',true), ('id_cards','id_cards',false)
+on conflict (id) do update set public = excluded.public;
 
--- Storage: product photos.
 drop policy if exists products_storage_select on storage.objects;
-create policy products_storage_select on storage.objects
-for select to anon, authenticated
-using (bucket_id = 'products');
-
+create policy products_storage_select on storage.objects for select to anon, authenticated using (bucket_id = 'products');
 drop policy if exists products_storage_insert on storage.objects;
-create policy products_storage_insert on storage.objects
-for insert to authenticated
-with check (
-    bucket_id = 'products'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy products_storage_insert on storage.objects for insert to authenticated with check (bucket_id = 'products' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists products_storage_update on storage.objects;
-create policy products_storage_update on storage.objects
-for update to authenticated
-using (
-    bucket_id = 'products'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-)
-with check (
-    bucket_id = 'products'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy products_storage_update on storage.objects for update to authenticated using (bucket_id = 'products' and (storage.foldername(name))[1] = (select auth.uid())::text) with check (bucket_id = 'products' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists products_storage_delete on storage.objects;
-create policy products_storage_delete on storage.objects
-for delete to authenticated
-using (
-    bucket_id = 'products'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
+create policy products_storage_delete on storage.objects for delete to authenticated using (bucket_id = 'products' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
--- Storage: shop logos.
 drop policy if exists shops_storage_select on storage.objects;
-create policy shops_storage_select on storage.objects
-for select to anon, authenticated
-using (bucket_id = 'shops');
-
+create policy shops_storage_select on storage.objects for select to anon, authenticated using (bucket_id = 'shops');
 drop policy if exists shops_storage_insert on storage.objects;
-create policy shops_storage_insert on storage.objects
-for insert to authenticated
-with check (
-    bucket_id = 'shops'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy shops_storage_insert on storage.objects for insert to authenticated with check (bucket_id = 'shops' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists shops_storage_update on storage.objects;
-create policy shops_storage_update on storage.objects
-for update to authenticated
-using (
-    bucket_id = 'shops'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-)
-with check (
-    bucket_id = 'shops'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy shops_storage_update on storage.objects for update to authenticated using (bucket_id = 'shops' and (storage.foldername(name))[1] = (select auth.uid())::text) with check (bucket_id = 'shops' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists shops_storage_delete on storage.objects;
-create policy shops_storage_delete on storage.objects
-for delete to authenticated
-using (
-    bucket_id = 'shops'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
+create policy shops_storage_delete on storage.objects for delete to authenticated using (bucket_id = 'shops' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
--- Storage: certification ID cards are private and owner-only.
 drop policy if exists id_cards_storage_select on storage.objects;
-create policy id_cards_storage_select on storage.objects
-for select to authenticated
-using (
-    bucket_id = 'id_cards'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy id_cards_storage_select on storage.objects for select to authenticated using (bucket_id = 'id_cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists id_cards_storage_insert on storage.objects;
-create policy id_cards_storage_insert on storage.objects
-for insert to authenticated
-with check (
-    bucket_id = 'id_cards'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy id_cards_storage_insert on storage.objects for insert to authenticated with check (bucket_id = 'id_cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists id_cards_storage_update on storage.objects;
-create policy id_cards_storage_update on storage.objects
-for update to authenticated
-using (
-    bucket_id = 'id_cards'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-)
-with check (
-    bucket_id = 'id_cards'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
-
+create policy id_cards_storage_update on storage.objects for update to authenticated using (bucket_id = 'id_cards' and (storage.foldername(name))[1] = (select auth.uid())::text) with check (bucket_id = 'id_cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
 drop policy if exists id_cards_storage_delete on storage.objects;
-create policy id_cards_storage_delete on storage.objects
-for delete to authenticated
-using (
-    bucket_id = 'id_cards'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-);
+create policy id_cards_storage_delete on storage.objects for delete to authenticated using (bucket_id = 'id_cards' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
--- Done.
+-- =========================
+-- 7. DATA API + SUPPRESSION COMPTE
+-- =========================
 
-
--- ============================================================
--- COMPATIBILITÉ DES PROFILS EXISTANTS
--- ============================================================
-
-alter table public.users
-    add column if not exists email text;
-
--- Pour les anciennes installations qui auraient ajouté email sans
--- contrainte unique, cette protection évite les doublons.
-create unique index if not exists users_email_lower_unique_idx
-    on public.users (lower(email))
-    where email is not null and trim(email) <> '';
-
-
--- Yaar-App / Supabase FINAL SETUP
--- Run this once in the real Supabase SQL Editor (not Logs).
--- Safe to run after Yaar-App-Supabase-Initial-Schema.sql.
--- No Firebase data is migrated.
-
--- Data API permissions. RLS remains the row-level security boundary.
 grant select on public.shops, public.products, public.product_images to anon, authenticated;
 grant select, insert, update, delete on public.users to authenticated;
 grant select, insert, update, delete on public.shops, public.products, public.product_images to authenticated;
 grant select, insert, update, delete on public.interests, public.ad_campaigns to authenticated;
 grant select, insert, update, delete on public.conversations, public.messages to authenticated;
+grant select on public.payment_transactions to authenticated;
 
--- A shop owner may delete their own interest notifications during account deletion.
-drop policy if exists interests_owner_delete on public.interests;
-create policy interests_owner_delete
-on public.interests
-for delete to authenticated
-using (shop_owner_id = (select auth.uid()));
-
--- Secure account deletion. No service_role key is ever embedded in Android.
 create or replace function public.delete_my_account()
 returns void
 language plpgsql
@@ -564,15 +363,13 @@ security definer
 set search_path = ''
 as $$
 begin
-    if (select auth.uid()) is null then
+    if auth.uid() is null then
         raise exception 'not_authenticated';
     end if;
-
-    delete from auth.users
-    where id = (select auth.uid());
+    delete from auth.users where id = auth.uid();
 end;
 $$;
-
 revoke all on function public.delete_my_account() from public;
 grant execute on function public.delete_my_account() to authenticated;
 
+-- Fin du script.

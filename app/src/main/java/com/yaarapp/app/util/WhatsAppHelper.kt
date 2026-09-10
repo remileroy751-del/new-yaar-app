@@ -34,7 +34,7 @@ object WhatsAppHelper {
      * le message prérempli, puis l'utilisateur choisit la conversation du fournisseur.
      */
     fun discussProduct(context: Context, product: Product, shop: Shop) {
-        val message = "Bonjour, je suis intéressé(e) par le produit \"${product.name}\" (${formatPrice(product.price)}) publié par ${shop.name} à ${product.city} sur Yaar-App."
+        val message = "Bonjour, je suis intéressé par ${product.name} (${formatPrice(product.price)}) sur Yaar-App."
         val image = product.imageUrl
         if (image.isBlank() || image.startsWith("res:")) {
             openWhatsApp(context, shop.whatsappNumber, message)
@@ -59,6 +59,11 @@ object WhatsAppHelper {
                 Handler(Looper.getMainLooper()).post { openWhatsApp(context, shop.whatsappNumber, message) }
             }
         }.start()
+    }
+
+    fun continueConversationOnWhatsApp(context: Context, number: String, productName: String) {
+        val message = "Bonjour, je souhaite continuer notre discussion au sujet de \"$productName\" sur Yaar-App."
+        openWhatsApp(context, number, message)
     }
 
     fun orderCartGroupedByShop(context: Context, items: List<CartItem>) {

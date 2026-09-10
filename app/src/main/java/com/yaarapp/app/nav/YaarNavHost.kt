@@ -24,7 +24,9 @@ import com.yaarapp.app.ui.screens.CartScreen
 import com.yaarapp.app.ui.screens.ChatScreen
 import com.yaarapp.app.ui.screens.CertifyShopScreen
 import com.yaarapp.app.ui.screens.ConfigureAdCampaignScreen
-import com.yaarapp.app.ui.screens.KkiapayCheckoutScreen
+import com.yaarapp.app.ui.screens.PayDunyaCheckoutScreen
+import com.yaarapp.app.ui.screens.ConversationsScreen
+import com.yaarapp.app.ui.screens.ConversationScreen
 import com.yaarapp.app.ui.screens.LoginScreen
 import com.yaarapp.app.ui.screens.MarketplaceScreen
 import com.yaarapp.app.ui.screens.MyAdsScreen
@@ -54,7 +56,7 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
     val cartItemCount by viewModel.cartItemCount.collectAsState()
     val termsAccepted by viewModel.termsAccepted.collectAsStateWithLifecycle()
 
-    val mainTabs = listOf(Routes.PROFILE, Routes.MY_SHOP, Routes.MARKETPLACE)
+    val mainTabs = listOf(Routes.PROFILE, Routes.CONVERSATIONS, Routes.MY_SHOP, Routes.MARKETPLACE)
     val showBottomBar = currentRoute in mainTabs
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -141,6 +143,20 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         }
                     )
                 }
+                composable(Routes.CONVERSATIONS) {
+                    ConversationsScreen(
+                        viewModel = viewModel,
+                        onOpen = { id -> navController.navigate(Routes.conversation(id)) }
+                    )
+                }
+                composable(
+                    route = Routes.CONVERSATION,
+                    arguments = listOf(navArgument("conversationId") { type = NavType.StringType })
+                ) { entry ->
+                    val id = entry.arguments?.getString("conversationId") ?: return@composable
+                    ConversationScreen(conversationId = id, viewModel = viewModel, onBack = { navController.popBackStack() })
+                }
+
                 composable(
                     route = Routes.PRODUCT_DETAIL,
                     arguments = listOf(navArgument("productId") { type = NavType.IntType })
@@ -151,7 +167,11 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
                         onViewShop = { shopId -> navController.navigate(Routes.shopPublic(shopId)) },
-                        onChatSupplier = { navController.navigate(Routes.chat(productId)) }
+                        onChatSupplier = { product, shop ->
+                            viewModel.openChat(product, shop) { id, error ->
+                                if (id != null) navController.navigate(Routes.conversation(id))
+                            }
+                        }
                     )
                 }
                 composable(
@@ -209,7 +229,7 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         onBack = { navController.popBackStack() },
                         onSubscribe = {
                             viewModel.requestProductCapacityUpgrade()
-                            navController.navigate(Routes.KKIAPAY_CHECKOUT)
+                            navController.navigate(Routes.PAYDUNYA_CHECKOUT)
                         }
                     )
                 }
@@ -227,11 +247,11 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                     ConfigureAdCampaignScreen(
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
-                        onConfirmed = { navController.navigate(Routes.KKIAPAY_CHECKOUT) }
+                        onConfirmed = { navController.navigate(Routes.PAYDUNYA_CHECKOUT) }
                     )
                 }
-                composable(Routes.KKIAPAY_CHECKOUT) {
-                    KkiapayCheckoutScreen(
+                composable(Routes.PAYDUNYA_CHECKOUT) {
+                    PayDunyaCheckoutScreen(
                         viewModel = viewModel,
                         onCancel = {
                             viewModel.cancelPendingPayment()
@@ -251,7 +271,7 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                     CertifyShopScreen(
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
-                        onContinueToPayment = { navController.navigate(Routes.KKIAPAY_CHECKOUT) }
+                        onContinueToPayment = { navController.navigate(Routes.PAYDUNYA_CHECKOUT) }
                     )
                 }
 

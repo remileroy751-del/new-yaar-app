@@ -2,6 +2,7 @@ package com.yaarapp.app.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.Badge
@@ -17,7 +18,8 @@ data class BottomNavItem(val route: String, val label: String, val icon: android
 
 // Ordre demandé : Mon profil, Ma boutique, Acheter
 val bottomNavItems = listOf(
-    BottomNavItem(Routes.PROFILE, "Mon profil", Icons.Filled.Person),
+    BottomNavItem(Routes.PROFILE, "Profil", Icons.Filled.Person),
+    BottomNavItem(Routes.CONVERSATIONS, "Discussions", Icons.Filled.ChatBubbleOutline),
     BottomNavItem(Routes.MY_SHOP, "Ma boutique", Icons.Filled.Storefront),
     BottomNavItem(Routes.MARKETPLACE, "Acheter", Icons.Filled.ShoppingBag)
 )

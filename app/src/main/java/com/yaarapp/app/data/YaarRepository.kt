@@ -155,10 +155,10 @@ class YaarRepository(context: Context) {
         val lower = message.lowercase()
         return when {
             lower.contains("invalid login credentials") || lower.contains("invalid_credentials") || lower.contains("invalid credentials") -> "Adresse e-mail ou mot de passe incorrect."
-            lower.contains("user already registered") || lower.contains("already registered") -> "Cette adresse e-mail possède déjà un compte Supabase."
-            lower.contains("email not confirmed") -> "La confirmation par e-mail doit être désactivée dans Supabase pour Yaar-App."
+            lower.contains("user already registered") || lower.contains("already registered") -> "Cette adresse e-mail possède déjà un compte."
+            lower.contains("email not confirmed") -> "La confirmation par e-mail doit être désactivée pour Yaar-App."
             lower.contains("network") || lower.contains("unable to resolve") || lower.contains("timeout") -> "Connexion Internet impossible. Vérifiez votre réseau puis réessayez."
-            else -> message.ifBlank { "Une erreur Supabase est survenue. Vérifiez votre connexion Internet." }
+            else -> message.ifBlank { "Une erreur est survenue. Vérifiez votre connexion Internet." }
         }
     }
 
@@ -186,11 +186,23 @@ class YaarRepository(context: Context) {
     suspend fun sendChatMessage(product: Product, shop: Shop, buyer: User, text: String) =
         supabaseSync.sendChatMessage(product, shop, buyer, text)
 
+    suspend fun ensureConversation(product: Product, shop: Shop, buyer: User): String =
+        supabaseSync.ensureConversation(product, shop, buyer)
+
     fun observeChatMessages(conversationId: String): Flow<List<ChatMessage>> =
         supabaseSync.observeChatMessages(conversationId)
 
     fun conversationId(product: Product, shop: Shop, buyer: User): String =
         supabaseSync.conversationId(product, shop, buyer)
+
+    fun observeConversations(uid: String): Flow<List<ChatConversation>> =
+        supabaseSync.observeConversations(uid)
+
+    fun observeConversation(conversationId: String): Flow<ChatConversation?> =
+        supabaseSync.observeConversation(conversationId)
+
+    suspend fun sendChatMessageInConversation(conversationId: String, sender: User, text: String) =
+        supabaseSync.sendChatMessageInConversation(conversationId, sender, text)
 
     suspend fun getUser(id: Int): User? = userDao.findById(id)
 
@@ -290,7 +302,7 @@ class YaarRepository(context: Context) {
             supabaseSync.syncProductNow(created)
             AddProductResult.Success
         } catch (e: Exception) {
-            AddProductResult.Error(e.message ?: "Impossible de publier le produit sur Supabase.")
+            AddProductResult.Error(e.message ?: "Impossible de publier le produit. Vérifiez votre connexion Internet.")
         }
     }
 
@@ -341,7 +353,7 @@ class YaarRepository(context: Context) {
     /**
      * Lance une campagne : [expositions] doit être compris entre [AdPricing.MIN_EXPOSITIONS]
      * et [AdPricing.MAX_EXPOSITIONS], [days] entre [AdPricing.MIN_DAYS] et [AdPricing.MAX_DAYS].
-     * Le montant facturé est [AdPricing.priceFor] (déjà payé sur Kkiapay avant cet appel).
+     * Le montant facturé est [AdPricing.priceFor] (confirmé par PayDunya avant cet appel).
      */
     suspend fun createAdCampaign(product: Product, shop: Shop, expositions: Int, days: Int): AdCampaign {
         val now = System.currentTimeMillis()

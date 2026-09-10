@@ -7,12 +7,16 @@ import com.yaarapp.app.data.AdCampaign
 import com.yaarapp.app.data.AdPricing
 import com.yaarapp.app.data.AuthResult
 import com.yaarapp.app.data.CartItem
+import com.yaarapp.app.data.ChatConversation
 import com.yaarapp.app.data.CertificationConfig
 import com.yaarapp.app.data.Country
 import com.yaarapp.app.data.Interest
 import com.yaarapp.app.data.InterestStatus
 import com.yaarapp.app.data.Product
 import com.yaarapp.app.data.ProductCategories
+import com.yaarapp.app.data.PayDunyaCreateRequest
+import com.yaarapp.app.data.PayDunyaCreateResponse
+import com.yaarapp.app.data.PayDunyaService
 import com.yaarapp.app.data.Shop
 import com.yaarapp.app.data.ShopLimits
 import com.yaarapp.app.data.User
@@ -31,9 +35,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
+
+    private val payDunyaService = PayDunyaService()
 
     // ---------- Session ----------
 
@@ -288,7 +296,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     // ---------- Ma boutique ----------
 
     /**
-     * Dernier évènement de synchronisation Supabase (succès ✅ ou échec ❌), affiché en
+     * Dernier état de connexion, affiché en
      * bannière dans "Ma boutique" — permet de diagnostiquer sans outil externe.
      */
     val lastSyncEvent: StateFlow<String?> = repository.lastSyncEvent
@@ -367,6 +375,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     private val _addProductError = MutableStateFlow<String?>(null)
     val addProductError: StateFlow<String?> = _addProductError
 
+    private val _publicationStatus = MutableStateFlow<String?>(null)
+    val publicationStatus: StateFlow<String?> = _publicationStatus
+    private var publicationStatusJob: Job? = null
+
     fun addProduct(
         name: String,
         description: String,
@@ -381,6 +393,12 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
             when (val result = repository.addProduct(shop, name, description, price, imageUrl, category, availableCities)) {
                 is AddProductResult.Success -> {
                     _addProductError.value = null
+                    publicationStatusJob?.cancel()
+                    _publicationStatus.value = "En cours de validation"
+                    publicationStatusJob = viewModelScope.launch {
+                        delay(10_000L)
+                        _publicationStatus.value = "Publié"
+                    }
                     onSuccess()
                 }
                 is AddProductResult.LimitReached ->
@@ -418,7 +436,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
-    // ---------- Paiement Kkiapay : capacité produits, campagne publicitaire, certification ----------
+    // ---------- Paiement PayDunya : capacité produits, campagne publicitaire, certification ----------
 
     sealed class PendingPayment {
         abstract val amountFcfa: Int
@@ -464,7 +482,7 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     /**
      * Étape 2 : le vendeur règle le nombre d'expositions (bornes [AdPricing.MIN_EXPOSITIONS]
      * à [AdPricing.MAX_EXPOSITIONS]) et le nombre de jours ([AdPricing.MIN_DAYS] à
-     * [AdPricing.MAX_DAYS]) → le prix est calculé automatiquement puis ouvre Kkiapay.
+     * [AdPricing.MAX_DAYS]) → le prix est calculé automatiquement puis ouvre PayDunya.
      */
     fun requestAdCampaign(expositions: Int, days: Int) {
         val product = _productToPromote.value ?: return
@@ -499,7 +517,41 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         _pendingPayment.value = null
     }
 
-    /** Appelé par l'écran de paiement Kkiapay quand le widget confirme le succès du paiement. */
+    suspend fun createPayDunyaPayment(): Pair<String, String> {
+        val payment = _pendingPayment.value ?: error("Aucun paiement en attente.")
+        val user = _currentUser.value ?: error("Aucun compte connecté.")
+        val shop = myShop.value
+        val request = when (payment) {
+            is PendingPayment.ProductCapacityUpgrade -> PayDunyaCreateRequest(
+                purpose = "PRODUCT_CAPACITY", amountFcfa = payment.amountFcfa, description = payment.description, shopId = shop?.remoteId
+            )
+            is PendingPayment.ProductPromotion -> PayDunyaCreateRequest(
+                purpose = "PRODUCT_PROMOTION", amountFcfa = payment.amountFcfa, description = payment.description,
+                productId = payment.product.remoteId, shopId = shop?.remoteId, expositions = payment.expositions, durationDays = payment.days
+            )
+            is PendingPayment.ShopCertification -> PayDunyaCreateRequest(
+                purpose = "SHOP_CERTIFICATION", amountFcfa = payment.amountFcfa, description = payment.description, shopId = shop?.remoteId
+            )
+        }
+        if (request.shopId.isNullOrBlank()) error("Boutique introuvable. Ouvrez d'abord votre boutique.")
+        val response = payDunyaService.createPayment(request)
+        return response.paymentId to response.checkoutUrl
+    }
+
+    suspend fun checkPayDunyaPayment(paymentId: String): String =
+        payDunyaService.checkPayment(paymentId).status
+
+    fun checkPayDunyaPayment(paymentId: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            runCatching { checkPayDunyaPayment(paymentId) }
+                .onSuccess { status ->
+                    if (status == "COMPLETED") onPaymentSuccess { onResult(status) } else onResult(status)
+                }
+                .onFailure { onResult("ERROR") }
+        }
+    }
+
+    /** Appelé après confirmation serveur PayDunya. */
     fun onPaymentSuccess(onDone: () -> Unit) {
         val payment = _pendingPayment.value ?: return
         viewModelScope.launch {
@@ -582,6 +634,27 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         cartItems.map { items -> items.sumOf { it.quantity } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val conversations: StateFlow<List<ChatConversation>> = currentUser.flatMapLatest { user ->
+        val uid = user?.firebaseUid
+        if (uid.isNullOrBlank()) emptyFlow() else repository.observeConversations(uid)
+    }.catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun refreshConversations() { /* Le flux se rafraîchit automatiquement. */ }
+
+    fun conversation(id: String): kotlinx.coroutines.flow.Flow<ChatConversation?> = repository.observeConversation(id)
+
+    fun openChat(product: Product, shop: Shop, onReady: (String?, String?) -> Unit) {
+        val buyer = _currentUser.value
+        if (buyer?.firebaseUid.isNullOrBlank()) { onReady(null, "Veuillez vous connecter pour discuter."); return }
+        viewModelScope.launch {
+            runCatching { repository.ensureConversation(product, shop, buyer!!) }
+                .onSuccess { onReady(it, null) }
+                .onFailure { onReady(null, it.message ?: "Impossible d'ouvrir la discussion.") }
+        }
+    }
+
     fun chatConversationId(product: Product, shop: Shop): String? {
         val buyer = _currentUser.value ?: return null
         if (buyer.firebaseUid == null) return null
@@ -597,6 +670,17 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         if (text.isBlank()) return
         viewModelScope.launch {
             runCatching { repository.sendChatMessage(product, shop, buyer, text) }
+                .onSuccess { onResult(null) }
+                .onFailure { onResult(it.message ?: "Impossible d'envoyer le message.") }
+        }
+    }
+
+    fun sendChatMessageInConversation(conversationId: String, text: String, onResult: (String?) -> Unit = {}) {
+        val sender = _currentUser.value
+        if (sender == null || sender.firebaseUid == null) { onResult("Veuillez vous connecter pour discuter."); return }
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            runCatching { repository.sendChatMessageInConversation(conversationId, sender, text) }
                 .onSuccess { onResult(null) }
                 .onFailure { onResult(it.message ?: "Impossible d'envoyer le message.") }
         }

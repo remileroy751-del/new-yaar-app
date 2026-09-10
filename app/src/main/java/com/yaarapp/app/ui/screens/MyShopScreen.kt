@@ -101,6 +101,7 @@ fun MyShopScreen(
     val expiredNotice by viewModel.expiredNotice.collectAsStateWithLifecycle()
     val unreadCount by viewModel.unreadInterestCount.collectAsStateWithLifecycle()
     val lastSyncEvent by viewModel.lastSyncEvent.collectAsStateWithLifecycle()
+    val publicationStatus by viewModel.publicationStatus.collectAsStateWithLifecycle()
     val maxProducts = currentShop.maxProducts.coerceAtLeast(1)
     val activeCount = products.count { it.isActive }
     val productRows = remember(products) { products.chunked(2) }
@@ -149,25 +150,45 @@ fun MyShopScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (syncMessage.startsWith("✅"))
+                            containerColor = if (syncMessage == "Connexion réussie")
                                 MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.errorContainer
                         )
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                "Synchronisation en ligne (Supabase)",
+                                syncMessage,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            Text(syncMessage, style = MaterialTheme.typography.bodySmall)
                             TextButton(
                                 onClick = { viewModel.dismissLastSyncEvent() },
                                 modifier = Modifier.align(Alignment.End)
                             ) {
-                                Text("Compris")
+                                Text("J'ai compris")
                             }
                         }
+                    }
+                }
+            }
+
+            if (publicationStatus != null) {
+                item(key = "publication_status") {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Text(
+                            publicationStatus.orEmpty(),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(12.dp)
+                        )
                     }
                 }
             }
@@ -213,7 +234,7 @@ fun MyShopScreen(
                                 .align(Alignment.End)
                                 .padding(end = 8.dp, bottom = 4.dp)
                         ) {
-                            Text("Compris")
+                            Text("J'ai compris")
                         }
                     }
                 }
