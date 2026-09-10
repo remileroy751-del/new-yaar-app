@@ -428,7 +428,9 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
             val rows = runCatching {
                 val asBuyer = client.from("conversations").select { filter { eq("buyer_uid", uid) } }.decodeList<ConversationRow>()
                 val asSeller = client.from("conversations").select { filter { eq("seller_uid", uid) } }.decodeList<ConversationRow>()
-                (asBuyer + asSeller).distinctBy { it.id }.sortedByDescending { it.updatedAt?.toEpochMillis() ?: 0L }
+                (asBuyer + asSeller).distinctBy { it.id }.sortedByDescending { row ->
+                    row.updatedAt?.let { timestamp -> timestamp.toEpochMillis() } ?: 0L
+                }
             }.getOrDefault(emptyList())
             emit(rows.map { it.toDomain() })
             delay(3_000L)

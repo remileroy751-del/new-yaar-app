@@ -2,7 +2,7 @@ package com.yaarapp.app.data
 
 import com.yaarapp.app.supabase.SupabaseModule
 import io.github.jan.supabase.functions.functions
-import io.ktor.client.call.body
+import io.github.jan.supabase.safeBody
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -33,8 +33,8 @@ class PayDunyaService {
     private val client get() = SupabaseModule.client
 
     suspend fun createPayment(request: PayDunyaCreateRequest): PayDunyaCreateResponse =
-        client.functions.invoke("paydunya-create-invoice", body = request).body()
+        client.functions.invoke("paydunya-create-invoice", body = request).safeBody<PayDunyaCreateResponse>()
 
     suspend fun checkPayment(paymentId: String): PayDunyaCheckResponse =
-        client.functions.invoke("paydunya-check-payment", body = PayDunyaCheckRequest(paymentId)).body()
+        client.functions.invoke("paydunya-check-payment", body = PayDunyaCheckRequest(paymentId)).safeBody<PayDunyaCheckResponse>()
 }
