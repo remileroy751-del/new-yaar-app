@@ -39,6 +39,8 @@ data class Shop(
     /** Fin de la période mensuelle payée (30 jours). */
     val certificationExpiresAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Dernière modification du nom de la boutique. Null = jamais modifié depuis sa création. */
+    val nameChangedAt: Long? = null,
     /**
      * Identifiant du document Supabase correspondant (auto-généré par Supabase,
      * globalement unique) une fois cette boutique synchronisée en ligne. `null` tant
@@ -46,4 +48,19 @@ data class Shop(
      * pleinement fonctionnelle en local dans ce cas, la synchro réessaiera plus tard.
      */
     val remoteId: String? = null
-)
+) {
+    fun nextNameChangeAt(): Long = (nameChangedAt ?: createdAt) + 30L * 24L * 60L * 60L * 1000L
+    fun canChangeName(now: Long = System.currentTimeMillis()): Boolean = now >= nextNameChangeAt()
+
+    fun yearsMonthsDaysLabel(now: Long = System.currentTimeMillis()): String {
+        val days = ((now - createdAt).coerceAtLeast(0L)) / (24L * 60L * 60L * 1000L)
+        val years = days / 365
+        val months = (days % 365) / 30
+        val remainingDays = (days % 365) % 30
+        return when {
+            years > 0 -> if (years == 1L) "A rejoint Yaar-App il y a 1 an" else "A rejoint Yaar-App il y a $years ans"
+            months > 0 -> if (months == 1L) "A rejoint Yaar-App il y a 1 mois" else "A rejoint Yaar-App il y a $months mois"
+            else -> if (remainingDays <= 1L) "A rejoint Yaar-App il y a 1 jour" else "A rejoint Yaar-App il y a $remainingDays jours"
+        }
+    }
+}

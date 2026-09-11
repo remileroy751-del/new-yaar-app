@@ -28,9 +28,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -81,11 +83,15 @@ fun MyShopScreen(
 ) {
     val shop by viewModel.myShop.collectAsStateWithLifecycle()
     val error by viewModel.shopCreationError.collectAsStateWithLifecycle()
+    val shopNameMessage by viewModel.shopNameMessage.collectAsStateWithLifecycle()
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var newShopName by remember { mutableStateOf("") }
 
     // Tant qu'aucune boutique n'existe, on affiche uniquement le formulaire de création.
     // Aucun accès forcé à shop n'est effectué ici : cela évite les NPE lors de la
     // restauration asynchrone de la session ou de la base locale.
     val currentShop = shop
+    LaunchedEffect(currentShop?.name) { newShopName = currentShop?.name.orEmpty() }
     if (currentShop == null) {
         CreateShopForm(error = error) { name, logoUrl, activity, categories ->
             viewModel.createShop(name, logoUrl, activity, categories) {}
@@ -111,6 +117,12 @@ fun MyShopScreen(
             TopAppBar(
                 title = { Text("Ma boutique — ${currentShop.name}", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = {
+                        newShopName = currentShop.name
+                        showRenameDialog = true
+                    }) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Modifier le nom de la boutique")
+                    }
                     IconButton(onClick = onOpenNotifications) {
                         if (unreadCount > 0) {
                             BadgedBox(badge = { Badge { Text(unreadCount.toString()) } }) {
@@ -141,6 +153,41 @@ fun MyShopScreen(
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
+            item(key = "shop_identity") {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(currentShop.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(currentShop.yearsMonthsDaysLabel(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 3.dp))
+                        Text(
+                            if (currentShop.canChangeName()) "Le nom peut être modifié maintenant." else "Le nom est modifiable au maximum une fois tous les 30 jours.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            if (shopNameMessage != null) {
+                item(key = "shop_name_message") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (shopNameMessage.orEmpty().startsWith("Nom de la boutique modifié")) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(shopNameMessage.orEmpty(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                            TextButton(onClick = { viewModel.clearShopNameMessage() }, modifier = Modifier.align(Alignment.End)) { Text("Fermer") }
+                        }
+                    }
+                }
+            }
+
             if (lastSyncEvent != null) {
                 item(key = "sync_event") {
                     val syncMessage = lastSyncEvent.orEmpty()
@@ -330,7 +377,44 @@ fun MyShopScreen(
             }
         }
     }
+
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Modifier le nom de la boutique") },
+            text = {
+                Column {
+                    Text(
+                        if (currentShop.canChangeName()) "Vous pouvez modifier le nom maintenant. Après cette modification, un délai de 30 jours sera appliqué avant toute nouvelle modification."
+                        else "Impossible de modifier le nom de votre boutique avant ${formatShopDate(currentShop.nextNameChangeAt())}.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedTextField(
+                        value = newShopName,
+                        onValueChange = { newShopName = it },
+                        label = { Text("Nouveau nom") },
+                        singleLine = true,
+                        enabled = currentShop.canChangeName(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameShop(newShopName)
+                        showRenameDialog = false
+                    },
+                    enabled = currentShop.canChangeName() && newShopName.trim().isNotBlank() && newShopName.trim() != currentShop.name.trim()
+                ) { Text("Enregistrer") }
+            },
+            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Annuler") } }
+        )
+    }
 }
+
+private fun formatShopDate(timestamp: Long): String =
+    java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRENCH).format(java.util.Date(timestamp))
 
 @Composable
 private fun CreateShopForm(

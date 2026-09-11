@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -35,6 +36,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -71,6 +75,9 @@ fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -
     var categoryMenuExpanded by remember { mutableStateOf(false) }
     var showCityPicker by remember { mutableStateOf(false) }
     var selectedCities by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showContactOptions by remember { mutableStateOf(false) }
+    var internalDiscussionEnabled by remember { mutableStateOf(true) }
+    var whatsappDiscussionEnabled by remember { mutableStateOf(true) }
     val error by viewModel.addProductError.collectAsStateWithLifecycle()
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val cities = user?.let { CityRepository.citiesFor(it.country) }.orEmpty()
@@ -100,6 +107,50 @@ fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -
             Text("Visibilité du produit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
             Text("Votre ville est sélectionnée automatiquement. Vous pouvez ajouter gratuitement jusqu'à 5 autres villes du même pays.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             user?.city?.let { city -> Text("Ville principale : $city", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 8.dp)) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { showContactOptions = !showContactOptions }) {
+                        Icon(Icons.Filled.SettingsSuggest, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+                            Text("Options de discussion", fontWeight = FontWeight.Bold)
+                            Text(
+                                if (internalDiscussionEnabled && whatsappDiscussionEnabled) "Discussion interne + WhatsApp activées"
+                                else if (internalDiscussionEnabled) "Discussion interne activée"
+                                else if (whatsappDiscussionEnabled) "Discussion WhatsApp activée"
+                                else "Toutes les discussions désactivées",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(if (showContactOptions) "Masquer" else "Modifier", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                    if (showContactOptions) {
+                        Text(
+                            "Ces réglages sont propres à ce produit. Par défaut, les deux moyens de discussion sont activés.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Option 1 : Discussion interne", fontWeight = FontWeight.Medium)
+                                Text("Permet aux acheteurs de vous écrire dans Yaar-App.", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = internalDiscussionEnabled, onCheckedChange = { internalDiscussionEnabled = it })
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Option 2 : Discussion WhatsApp", fontWeight = FontWeight.Medium)
+                                Text("Permet aux acheteurs d'ouvrir une discussion WhatsApp avec votre boutique.", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = whatsappDiscussionEnabled, onCheckedChange = { whatsappDiscussionEnabled = it })
+                        }
+                    }
+                }
+            }
 
             if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
             Button(onClick = { showCityPicker = true }, enabled = pickedImageUri != null && category != null && name.isNotBlank() && description.isNotBlank() && price.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Publier le produit") }
@@ -134,7 +185,7 @@ fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -
                     val uri = pickedImageUri ?: return@TextButton
                     val selectedCategory = category ?: return@TextButton
                     val savedPath = ImageStorage.saveToInternalStorage(context, uri) ?: return@TextButton
-                    viewModel.addProduct(name.trim(), description.trim(), price.toDoubleOrNull() ?: 0.0, savedPath, selectedCategory, selectedCities.toList()) { showCityPicker = false; onSaved() }
+                    viewModel.addProduct(name.trim(), description.trim(), price.toDoubleOrNull() ?: 0.0, savedPath, selectedCategory, selectedCities.toList(), internalDiscussionEnabled, whatsappDiscussionEnabled) { showCityPicker = false; onSaved() }
                 }) { Text("Confirmer et publier") }
             },
             dismissButton = { TextButton(onClick = { showCityPicker = false }) { Text("Annuler") } }

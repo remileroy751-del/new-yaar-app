@@ -54,7 +54,8 @@ create table if not exists public.shops (
     certification_requested_at timestamptz,
     certification_paid_at timestamptz,
     certification_expires_at timestamptz,
-    created_at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+    name_changed_at timestamptz
 );
 
 create unique index if not exists shops_one_per_owner_idx on public.shops(owner_uid);
@@ -78,13 +79,44 @@ create table if not exists public.products (
     is_active boolean not null default true,
     created_at timestamptz not null default now(),
     activated_at timestamptz not null default now(),
-    is_promoted boolean not null default false
+    is_promoted boolean not null default false,
+    internal_discussion_enabled boolean not null default true,
+    whatsapp_discussion_enabled boolean not null default true
 );
 
 create index if not exists products_owner_idx on public.products(owner_uid);
 create index if not exists products_shop_idx on public.products(shop_id);
 create index if not exists products_active_idx on public.products(is_active);
 create index if not exists products_country_city_idx on public.products(country, city);
+
+-- V1.4 : options de discussion par produit + limitation du changement de nom de boutique.
+alter table public.shops add column if not exists name_changed_at timestamptz;
+alter table public.products add column if not exists internal_discussion_enabled boolean not null default true;
+alter table public.products add column if not exists whatsapp_discussion_enabled boolean not null default true;
+
+-- Le serveur impose réellement le délai de 30 jours : le contrôle ne dépend donc pas uniquement de l'application Android.
+create or replace function public.enforce_shop_name_change_cooldown()
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.name is distinct from old.name then
+        if old.name_changed_at is not null and now() < old.name_changed_at + interval '30 days' then
+            raise exception 'Impossible de modifier le nom de votre boutique avant %.',
+                to_char(old.name_changed_at + interval '30 days', 'DD/MM/YYYY');
+        end if;
+        new.name_changed_at = now();
+    else
+        new.name_changed_at = old.name_changed_at;
+    end if;
+    return new;
+end;
+$$;
+
+drop trigger if exists shops_name_change_cooldown on public.shops;
+create trigger shops_name_change_cooldown
+before update on public.shops
+for each row execute function public.enforce_shop_name_change_cooldown();
 
 create table if not exists public.product_images (
     id uuid primary key default gen_random_uuid(),

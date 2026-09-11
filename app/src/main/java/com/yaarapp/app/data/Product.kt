@@ -57,6 +57,9 @@ data class Product(
      * modifié directement ailleurs.
      */
     val isPromoted: Boolean = false,
+    /** Contrôle les canaux de discussion exposés aux acheteurs pour ce produit. */
+    val internalDiscussionEnabled: Boolean = true,
+    val whatsappDiscussionEnabled: Boolean = true,
     /**
      * Identifiant du document Supabase correspondant une fois ce produit synchronisé
      * en ligne (voir [Shop.remoteId] pour le principe complet).

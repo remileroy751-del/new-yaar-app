@@ -111,6 +111,12 @@ fun ShopPublicScreen(
                             }
                             Column(modifier = Modifier.padding(start = 12.dp)) {
                                 Text(s.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = s.yearsMonthsDaysLabel(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         Icons.Filled.LocationOn,

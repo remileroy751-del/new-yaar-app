@@ -219,6 +219,27 @@ class YaarRepository(context: Context) {
 
     fun observeMyShop(ownerId: Int): Flow<Shop?> = shopDao.observeShopForOwner(ownerId)
 
+    /** Modifie le nom de la boutique au maximum une fois tous les 30 jours. */
+    suspend fun renameShop(shop: Shop, newName: String): Result<Shop> {
+        val cleanName = newName.trim()
+        if (cleanName.isBlank()) return Result.failure(IllegalArgumentException("Merci de renseigner le nom de la boutique."))
+        if (cleanName == shop.name.trim()) return Result.failure(IllegalArgumentException("Le nouveau nom est identique à l'ancien."))
+        val now = System.currentTimeMillis()
+        if (!shop.canChangeName(now)) {
+            return Result.failure(IllegalStateException("Impossible de modifier le nom de votre boutique avant ${formatDate(shop.nextNameChangeAt())}."))
+        }
+        return runCatching {
+            // Le contrôle serveur Supabase reste la protection définitive contre un contournement local.
+            val updated = shop.copy(name = cleanName, nameChangedAt = now)
+            val synced = supabaseSync.syncShopNow(updated)
+            shopDao.update(synced)
+            synced
+        }
+    }
+
+    private fun formatDate(timestamp: Long): String =
+        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRENCH).format(java.util.Date(timestamp))
+
     /** La boutique hérite automatiquement du pays et de la ville du profil du vendeur. */
     suspend fun createShop(
         owner: User,
@@ -269,7 +290,9 @@ class YaarRepository(context: Context) {
         price: Double,
         imageUrl: String,
         category: String,
-        availableCities: List<String>
+        availableCities: List<String>,
+        internalDiscussionEnabled: Boolean = true,
+        whatsappDiscussionEnabled: Boolean = true
     ): AddProductResult {
         if (name.isBlank() || description.isBlank() || imageUrl.isBlank() || price <= 0) {
             return AddProductResult.Error("Merci de remplir tous les champs (photo, nom, description, prix).")
@@ -291,7 +314,9 @@ class YaarRepository(context: Context) {
                 city = shop.city,
                 availableCities = (listOf(shop.city) + availableCities).distinct().take(6),
                 ownerUid = shop.ownerUid,
-                shopRemoteId = shop.remoteId
+                shopRemoteId = shop.remoteId,
+                internalDiscussionEnabled = internalDiscussionEnabled,
+                whatsappDiscussionEnabled = whatsappDiscussionEnabled
             )
         )
         val created = productDao.getById(id.toInt()) ?: return AddProductResult.Error("Impossible de préparer le produit.")

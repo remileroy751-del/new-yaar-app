@@ -339,6 +339,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
             certificationPaidAt = updated.certificationPaidAt?.toIso(),
             certificationExpiresAt = updated.certificationExpiresAt?.toIso(),
             createdAt = updated.createdAt.toIso(),
+            nameChangedAt = updated.nameChangedAt?.toIso(),
             idCardFrontStoragePath = front?.first, idCardBackStoragePath = back?.first
         )
         client.from("shops").upsert(row) { onConflict = "id" }
@@ -596,14 +597,15 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         @SerialName("certification_paid_at") val certificationPaidAt: String? = null,
         @SerialName("certification_expires_at") val certificationExpiresAt: String? = null,
         @SerialName("created_at") val createdAt: String? = null,
+        @SerialName("name_changed_at") val nameChangedAt: String? = null,
         @SerialName("id_card_front_storage_path") val idCardFrontStoragePath: String? = null,
         @SerialName("id_card_back_storage_path") val idCardBackStoragePath: String? = null
     ) {
-        fun toDomain(localId: Int, ownerId: Int) = Shop(localId, ownerId, ownerUid, name, whatsappNumber, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, logoUrl, activityDescription, categories, extraProductSlots, runCatching { CertificationStatus.valueOf(certificationStatus) }.getOrDefault(CertificationStatus.NONE), idCardFrontUrl, idCardBackUrl, certificationRequestedAt?.toEpochMillis(), certificationPaidAt?.toEpochMillis(), certificationExpiresAt?.toEpochMillis(), createdAt?.toEpochMillis() ?: System.currentTimeMillis(), id)
+        fun toDomain(localId: Int, ownerId: Int) = Shop(localId, ownerId, ownerUid, name, whatsappNumber, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, logoUrl, activityDescription, categories, extraProductSlots, runCatching { CertificationStatus.valueOf(certificationStatus) }.getOrDefault(CertificationStatus.NONE), idCardFrontUrl, idCardBackUrl, certificationRequestedAt?.toEpochMillis(), certificationPaidAt?.toEpochMillis(), certificationExpiresAt?.toEpochMillis(), createdAt?.toEpochMillis() ?: System.currentTimeMillis(), nameChangedAt?.toEpochMillis(), id)
         companion object { fun from(s: Shop) = ShopRow(
             s.remoteId ?: error("ID boutique manquant"), s.ownerUid ?: error("UID manquant"), s.name, s.whatsappNumber, s.country.name, s.city,
             s.logoUrl, s.logoUrl?.let { extractStorageObjectPath(it) }, s.activityDescription, s.categories, s.extraProductSlots, s.certificationStatus.name,
-            null, null, s.certificationRequestedAt?.toIso(), s.certificationPaidAt?.toIso(), s.certificationExpiresAt?.toIso(), s.createdAt.toIso(),
+            null, null, s.certificationRequestedAt?.toIso(), s.certificationPaidAt?.toIso(), s.certificationExpiresAt?.toIso(), s.createdAt.toIso(), s.nameChangedAt?.toIso(),
             s.idCardFrontUrl?.takeIf { !it.startsWith("http") }, s.idCardBackUrl?.takeIf { !it.startsWith("http") }
         ) }
     }
@@ -625,10 +627,12 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         @SerialName("is_active") val isActive: Boolean = true,
         @SerialName("created_at") val createdAt: String? = null,
         @SerialName("activated_at") val activatedAt: String? = null,
-        @SerialName("is_promoted") val isPromoted: Boolean = false
+        @SerialName("is_promoted") val isPromoted: Boolean = false,
+        @SerialName("internal_discussion_enabled") val internalDiscussionEnabled: Boolean = true,
+        @SerialName("whatsapp_discussion_enabled") val whatsappDiscussionEnabled: Boolean = true
     ) {
-        fun toDomain(localId: Int, localShopId: Int) = Product(localId, localShopId, shopName, name, description, price, imageUrl, category, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, availableCities.ifEmpty { listOf(city) }, ownerUid, shopId, isActive, createdAt?.toEpochMillis() ?: System.currentTimeMillis(), activatedAt?.toEpochMillis() ?: (createdAt?.toEpochMillis() ?: System.currentTimeMillis()), isPromoted, id)
-        companion object { fun from(p: Product) = ProductRow(p.remoteId ?: error("ID produit manquant"), p.shopRemoteId ?: error("ID boutique manquant"), p.ownerUid ?: error("UID manquant"), p.shopName, p.name, p.description, p.price, p.imageUrl, extractStorageObjectPath(p.imageUrl), p.category, p.country.name, p.city, p.availableCities.ifEmpty { listOf(p.city) }, p.isActive, p.createdAt.toIso(), p.activatedAt.toIso(), p.isPromoted) }
+        fun toDomain(localId: Int, localShopId: Int) = Product(localId, localShopId, shopName, name, description, price, imageUrl, category, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, availableCities.ifEmpty { listOf(city) }, ownerUid, shopId, isActive, createdAt?.toEpochMillis() ?: System.currentTimeMillis(), activatedAt?.toEpochMillis() ?: (createdAt?.toEpochMillis() ?: System.currentTimeMillis()), isPromoted, internalDiscussionEnabled, whatsappDiscussionEnabled, id)
+        companion object { fun from(p: Product) = ProductRow(p.remoteId ?: error("ID produit manquant"), p.shopRemoteId ?: error("ID boutique manquant"), p.ownerUid ?: error("UID manquant"), p.shopName, p.name, p.description, p.price, p.imageUrl, extractStorageObjectPath(p.imageUrl), p.category, p.country.name, p.city, p.availableCities.ifEmpty { listOf(p.city) }, p.isActive, p.createdAt.toIso(), p.activatedAt.toIso(), p.isPromoted, p.internalDiscussionEnabled, p.whatsappDiscussionEnabled) }
     }
 
     @Serializable data class ProductImageRow(val id: String, @SerialName("product_id") val productId: String, @SerialName("owner_uid") val ownerUid: String, @SerialName("storage_path") val storagePath: String, @SerialName("public_url") val publicUrl: String?, @SerialName("sort_order") val sortOrder: Int)

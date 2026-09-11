@@ -156,20 +156,34 @@ fun ProductDetailScreen(
                     modifier = Modifier.padding(top = 16.dp)
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = { shop?.let { onChatSupplier(p, it) } },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Discuter avec le fournisseur ici") }
-                    OutlinedButton(
-                        onClick = { shop?.let { WhatsAppHelper.discussProduct(context, p, it) } },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text("Discuter sur WhatsApp") }
+                val discussionButtons = p.internalDiscussionEnabled || p.whatsappDiscussionEnabled
+                if (discussionButtons) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (p.internalDiscussionEnabled) {
+                            Button(
+                                onClick = { shop?.let { onChatSupplier(p, it) } },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp)
+                            ) { Text("Discuter ici") }
+                        }
+                        if (p.whatsappDiscussionEnabled) {
+                            OutlinedButton(
+                                onClick = { shop?.let { WhatsAppHelper.discussProduct(context, p, it) } },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp)
+                            ) { Text("Discuter sur WhatsApp") }
+                        }
+                    }
+                } else {
+                    Text(
+                        "Le vendeur a désactivé les discussions pour ce produit.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
                 }
 
                 OutlinedButton(

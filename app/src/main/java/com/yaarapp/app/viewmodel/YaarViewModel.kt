@@ -324,6 +324,22 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     private val _shopCreationError = MutableStateFlow<String?>(null)
     val shopCreationError: StateFlow<String?> = _shopCreationError
 
+    private val _shopNameMessage = MutableStateFlow<String?>(null)
+    val shopNameMessage: StateFlow<String?> = _shopNameMessage
+
+    fun renameShop(newName: String) {
+        val shop = myShop.value ?: return
+        viewModelScope.launch {
+            repository.renameShop(shop, newName).onSuccess {
+                _shopNameMessage.value = "Nom de la boutique modifié avec succès. Vous pourrez le modifier à nouveau dans 30 jours."
+            }.onFailure {
+                _shopNameMessage.value = it.message ?: "Impossible de modifier le nom de votre boutique."
+            }
+        }
+    }
+
+    fun clearShopNameMessage() { _shopNameMessage.value = null }
+
     fun createShop(
         name: String,
         logoUrl: String?,
@@ -386,11 +402,13 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         imageUrl: String,
         category: String,
         availableCities: List<String>,
+        internalDiscussionEnabled: Boolean = true,
+        whatsappDiscussionEnabled: Boolean = true,
         onSuccess: () -> Unit
     ) {
         val shop = myShop.value ?: return
         viewModelScope.launch {
-            when (val result = repository.addProduct(shop, name, description, price, imageUrl, category, availableCities)) {
+            when (val result = repository.addProduct(shop, name, description, price, imageUrl, category, availableCities, internalDiscussionEnabled, whatsappDiscussionEnabled)) {
                 is AddProductResult.Success -> {
                     _addProductError.value = null
                     publicationStatusJob?.cancel()
