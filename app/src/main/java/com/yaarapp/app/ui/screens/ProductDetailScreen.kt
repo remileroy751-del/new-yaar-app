@@ -1,6 +1,6 @@
 package com.yaarapp.app.ui.screens
 
-import androidx.compose.foundation.Image
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.ShoppingCartCheckout
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yaarapp.app.data.Product
 import com.yaarapp.app.data.Shop
@@ -73,40 +75,24 @@ fun ProductDetailScreen(
         topBar = {
             TopAppBar(
                 title = { Text(product?.name ?: "") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                }
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") } }
             )
         }
     ) { padding ->
         val p = product
         if (p == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-            ) {
-                Text("Chargement...")
-            }
+            Column(modifier = Modifier.fillMaxSize().padding(padding), verticalArrangement = Arrangement.Center) { Text("Chargement...", modifier = Modifier.padding(24.dp)) }
             return@Scaffold
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
+        val isOwnListing = currentUser?.firebaseUid != null && currentUser?.firebaseUid == p.ownerUid
+        val isImmo = p.listingType == "IMMO_SALE" || p.listingType == "IMMO_RENT"
+
+        Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             AsyncImage(
                 model = ImageStorage.resolveImageModel(context, p.imageUrl),
                 contentDescription = p.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
                 contentScale = ContentScale.Crop
             )
             p.secondImageUrl?.takeIf { it.isNotBlank() }?.let { second ->
@@ -119,137 +105,84 @@ fun ProductDetailScreen(
             }
 
             Column(modifier = Modifier.padding(20.dp)) {
+                Text(p.category, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
+                Text(p.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
                 Text(
-                    text = p.category,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Text(
-                    text = p.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Text(
-                    text = if (p.listingType == "PRODUCT") "${p.price.toLong()} FCFA" else if (p.listingType == "IMMO_RENT") "Location" else "Vente",
+                    if (!isImmo) "${p.price.toLong()} FCFA" else if (p.listingType == "IMMO_RENT") "Location" else "Vente",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp)
                 )
                 shop?.let {
-                    Text(
-                        text = "Vendu par ${it.name}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                    Text("Publié par ${it.name}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
                 }
-                Text(
-                    text = "Disponible à ${p.city}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+                Text("Disponible à ${p.city}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
 
-                OutlinedButton(
-                    onClick = { onViewShop(p.shopId) },
-                    modifier = Modifier.padding(top = 10.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                OutlinedButton(onClick = { onViewShop(p.shopId) }, modifier = Modifier.padding(top = 10.dp), shape = RoundedCornerShape(12.dp)) {
                     Icon(Icons.Filled.Storefront, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(" Voir la boutique", modifier = Modifier.padding(start = 4.dp), style = MaterialTheme.typography.labelMedium)
                 }
 
-                Text(
-                    text = p.description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
+                Text(p.description, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 16.dp))
 
-                val isOwnListing = currentUser?.firebaseUid != null && currentUser?.firebaseUid == p.ownerUid
                 if (isOwnListing) {
-                    Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
                         Text(
-                            if (p.listingType == "PRODUCT") "Vous ne pouvez pas acheter votre propre produit." else "Vous ne pouvez pas acheter ou louer votre propre bien.",
-                            modifier = Modifier.padding(14.dp), fontWeight = FontWeight.Bold
+                            if (isImmo) "Vous ne pouvez pas acheter ou louer votre propre bien." else "Vous ne pouvez pas acheter votre propre produit.",
+                            modifier = Modifier.padding(14.dp),
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                val discussionButtons = p.internalDiscussionEnabled || p.whatsappDiscussionEnabled
-                if (discussionButtons && !isOwnListing) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
+                val discussionsEnabled = p.internalDiscussionEnabled || p.whatsappDiscussionEnabled
+                if (!isOwnListing && discussionsEnabled) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (p.internalDiscussionEnabled) {
-                            Button(
-                                onClick = { shop?.let { onChatSupplier(p, it) } },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp)
-                            ) { Text("Discuter ici") }
+                            Button(onClick = { shop?.let { onChatSupplier(p, it) } }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) { Text("Discuter ici") }
                         }
                         if (p.whatsappDiscussionEnabled) {
-                            OutlinedButton(
-                                onClick = { shop?.let { WhatsAppHelper.discussProduct(context, p, it) } },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(14.dp)
-                            ) { Text("Discuter sur WhatsApp") }
+                            OutlinedButton(onClick = { shop?.let { WhatsAppHelper.discussProduct(context, p, it) } }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) { Text("Discuter sur WhatsApp") }
                         }
                     }
-                } else {
-                    Text(
-                        "Le vendeur a désactivé les discussions pour ce produit.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
+                } else if (!isOwnListing && !discussionsEnabled) {
+                    Text("Le vendeur a désactivé les discussions pour ce produit.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), modifier = Modifier.padding(top = 16.dp))
                 }
 
-                OutlinedButton(
-                    onClick = {
-                        if (!interestSent) {
-                            shop?.let { viewModel.expressInterest(p, it) }
-                            interestSent = true
-                            Toast.makeText(context, "Le vendeur a été averti de votre intérêt.", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    enabled = !interestSent,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(Icons.Filled.FavoriteBorder, contentDescription = null)
-                    Text(
-                        if (interestSent) " Le vendeur a été averti" else " Je suis intéressé",
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                if (!isImmo && !isOwnListing) {
                     OutlinedButton(
-                        onClick = { shop?.let { viewModel.addToCart(p, it) } },
-                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            if (!interestSent) {
+                                shop?.let { viewModel.expressInterest(p, it) }
+                                interestSent = true
+                                Toast.makeText(context, "Le vendeur a été averti de votre intérêt.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = !interestSent,
+                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Icon(Icons.Filled.AddShoppingCart, contentDescription = null)
-                        Text(" Ajouter au panier", modifier = Modifier.padding(start = 4.dp))
+                        Icon(Icons.Filled.FavoriteBorder, contentDescription = null)
+                        Text(if (interestSent) " Le vendeur a été averti" else " Je suis intéressé", modifier = Modifier.padding(start = 4.dp))
                     }
-                    Button(
-                        onClick = { shop?.let { WhatsAppHelper.orderProduct(context, p, it) } },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(Icons.Filled.ShoppingCartCheckout, contentDescription = null)
-                        Text(" Acheter", modifier = Modifier.padding(start = 4.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = { shop?.let { viewModel.addToCart(p, it) } }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                            Icon(Icons.Filled.AddShoppingCart, contentDescription = null)
+                            Text(" Ajouter au panier", modifier = Modifier.padding(start = 4.dp))
+                        }
+                        Button(
+                            onClick = { shop?.let { WhatsAppHelper.orderProduct(context, p, it) } },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Filled.ShoppingCartCheckout, contentDescription = null)
+                            Text(" Acheter", modifier = Modifier.padding(start = 4.dp))
+                        }
                     }
                 }
             }

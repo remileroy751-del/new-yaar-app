@@ -46,6 +46,7 @@ fun MarketplaceScreen(
     val categories = viewModel.categories
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val cartCount by viewModel.cartItemCount.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -109,7 +110,7 @@ fun MarketplaceScreen(
                 }
             } else {
                 items(products, key = { it.id }) { product ->
-                    ProductCard(product = product, onClick = { onProductClick(product) })
+                    ProductCard(product = product, own = product.ownerUid != null && product.ownerUid == currentUser?.firebaseUid, onClick = { onProductClick(product) })
                 }
             }
         }

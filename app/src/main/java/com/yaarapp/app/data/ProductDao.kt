@@ -69,10 +69,10 @@ interface ProductDao {
     suspend fun count(): Int
 
     /** Produits encore actifs mais dont les 14 jours d'exposition gratuite sont dépassés. */
-    @Query("SELECT * FROM products WHERE shopId = :shopId AND isActive = 1 AND activatedAt <= :cutoff")
+    @Query("SELECT * FROM products WHERE shopId = :shopId AND isActive = 1 AND listingType = 'PRODUCT' AND activatedAt <= :cutoff")
     suspend fun getExpiredActiveForShop(shopId: Int, cutoff: Long): List<Product>
 
     /** Désactive en masse les produits expirés d'une boutique. Retourne le nombre de lignes touchées. */
-    @Query("UPDATE products SET isActive = 0 WHERE shopId = :shopId AND isActive = 1 AND activatedAt <= :cutoff")
+    @Query("UPDATE products SET isActive = 0 WHERE shopId = :shopId AND isActive = 1 AND listingType = 'PRODUCT' AND activatedAt <= :cutoff")
     suspend fun deactivateExpired(shopId: Int, cutoff: Long): Int
 }

@@ -19,8 +19,8 @@ android {
         applicationId = "com.yaarapp.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.4.0"
+        versionCode = 23
+        versionName = "1.5.0"
 
         vectorDrawables {
             useSupportLibrary = true

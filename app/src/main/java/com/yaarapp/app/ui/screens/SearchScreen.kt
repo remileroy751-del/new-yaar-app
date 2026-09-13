@@ -111,7 +111,7 @@ fun SearchScreen(
                 }
             } else {
                 items(sameCity, key = { it.id }) { product ->
-                    ProductCard(product = product, onClick = { onProductClick(product) })
+                    ProductCard(product = product, own = product.ownerUid != null && product.ownerUid == user?.firebaseUid, onClick = { onProductClick(product) })
                 }
             }
 
@@ -129,7 +129,7 @@ fun SearchScreen(
                 }
             } else {
                 items(otherCitiesResults, key = { it.id }) { product ->
-                    ProductCard(product = product, onClick = { onProductClick(product) })
+                    ProductCard(product = product, own = product.ownerUid != null && product.ownerUid == user?.firebaseUid, onClick = { onProductClick(product) })
                 }
             }
         }

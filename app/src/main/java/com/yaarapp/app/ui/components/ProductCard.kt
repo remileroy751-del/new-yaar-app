@@ -36,7 +36,8 @@ import com.yaarapp.app.util.ImageStorage
 fun ProductCard(
     product: Product,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    own: Boolean = false
 ) {
     val context = LocalContext.current
     Card(
@@ -67,7 +68,11 @@ fun ProductCard(
                         contentAlignment = Alignment.Center
                     ) { Text("Photo indisponible", style = MaterialTheme.typography.labelMedium) }
                 }
-                if (product.ownerUid == null) { }
+                if (own) {
+                    Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 4.dp)) {
+                        Text("Publié par vous", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
                 if (product.isPromoted) {
                     Box(
                         modifier = Modifier

@@ -59,6 +59,7 @@ fun ShopPublicScreen(
     val context = LocalContext.current
     var shop by remember { mutableStateOf<Shop?>(null) }
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
     LaunchedEffect(shopId) {
         shop = viewModel.getShop(shopId)
@@ -160,7 +161,7 @@ fun ShopPublicScreen(
             }
 
             items(shopProducts.filter { it.isActive }, key = { it.id }) { product ->
-                ProductCard(product = product, onClick = { onProductClick(product) })
+                ProductCard(product = product, own = product.ownerUid != null && product.ownerUid == currentUser?.firebaseUid, onClick = { onProductClick(product) })
             }
         }
     }

@@ -81,6 +81,7 @@ fun MyShopScreen(
     onPromoteProducts: () -> Unit,
     onOpenNotifications: () -> Unit
 ) {
+    val context = LocalContext.current
     val shop by viewModel.myShop.collectAsStateWithLifecycle()
     val error by viewModel.shopCreationError.collectAsStateWithLifecycle()
     val shopNameMessage by viewModel.shopNameMessage.collectAsStateWithLifecycle()
@@ -111,7 +112,7 @@ fun MyShopScreen(
     val lastSyncEvent by viewModel.lastSyncEvent.collectAsStateWithLifecycle()
     val publicationStatus by viewModel.publicationStatus.collectAsStateWithLifecycle()
     val maxProducts = currentShop.maxProducts.coerceAtLeast(1)
-    val activeCount = products.count { it.isActive }
+    val activeCount = products.count { it.isActive && it.listingType == "PRODUCT" }
     val productRows = remember(products) { products.chunked(2) }
 
     Scaffold(
@@ -408,8 +409,13 @@ fun MyShopScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.renameShop(newShopName)
-                        pickedLogoUri?.let { uri -> ImageStorage.saveToInternalStorage(LocalContext.current, uri)?.let { viewModel.updateShopLogo(it) } }
+                        val trimmedName = newShopName.trim()
+                        if (currentShop.canChangeName() && trimmedName.isNotBlank() && trimmedName != currentShop.name.trim()) {
+                            viewModel.renameShop(trimmedName)
+                        }
+                        pickedLogoUri?.let { uri ->
+                            ImageStorage.saveToInternalStorage(context, uri)?.let { path -> viewModel.updateShopLogo(path) }
+                        }
                         showRenameDialog = false
                     },
                     enabled = (currentShop.canChangeName() && newShopName.trim().isNotBlank() && newShopName.trim() != currentShop.name.trim()) || (currentShop.canChangeLogo() && pickedLogoUri != null)
@@ -434,10 +440,6 @@ private fun CreateShopForm(
     var pickedLogoUri by remember { mutableStateOf<Uri?>(null) }
     val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { pickedLogoUri = it }
     var selectedCategories by remember { mutableStateOf(setOf<String>()) }
-
-    val pickLogo = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) pickedLogoUri = uri }
 
     Column(
         modifier = Modifier
