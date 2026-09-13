@@ -14,13 +14,17 @@ interface ProductDao {
      * Les produits actuellement "sponsorisés" (campagne publicitaire active, voir
      * [AdCampaign]) sortent en premier, puis les plus récents en premier.
      */
-    @Query("SELECT * FROM products WHERE isActive = 1 ORDER BY isPromoted DESC, createdAt DESC")
+    @Query("SELECT * FROM products WHERE isActive = 1 AND listingType = 'PRODUCT' ORDER BY isPromoted DESC, createdAt DESC")
     fun observeAllActive(): Flow<List<Product>>
 
-    @Query("SELECT DISTINCT category FROM products WHERE isActive = 1 ORDER BY category ASC")
+    @Query("SELECT DISTINCT category FROM products WHERE isActive = 1 AND listingType = 'PRODUCT' ORDER BY category ASC")
     fun observeCategories(): Flow<List<String>>
 
     /** Tous les produits d'une boutique (actifs ET désactivés), pour l'écran "Ma boutique". */
+
+    @Query("SELECT * FROM products WHERE isActive = 1 AND listingType IN ('IMMO_SALE', 'IMMO_RENT') ORDER BY isPromoted DESC, createdAt DESC")
+    fun observeAllImmo(): Flow<List<Product>>
+
     @Query("SELECT * FROM products WHERE shopId = :shopId ORDER BY isActive DESC, createdAt DESC")
     fun observeByShop(shopId: Int): Flow<List<Product>>
 
@@ -40,7 +44,7 @@ interface ProductDao {
     suspend fun getAllForOwnerUid(ownerUid: String): List<Product>
 
     /** Nombre de produits actuellement EXPOSÉS (actifs) — c'est ce qui compte pour la limite du forfait. */
-    @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1")
+    @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1 AND listingType = 'PRODUCT'")
     suspend fun countActiveForShop(shopId: Int): Int
 
     @Insert

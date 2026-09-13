@@ -6,57 +6,22 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
-import androidx.compose.material.icons.filled.SettingsSuggest
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yaarapp.app.data.CityRepository
 import com.yaarapp.app.data.ProductCategories
@@ -66,129 +31,38 @@ import com.yaarapp.app.viewmodel.YaarViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Unit) {
-    val context = LocalContext.current
-    var pickedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf<String?>(null) }
-    var categoryMenuExpanded by remember { mutableStateOf(false) }
-    var showCityPicker by remember { mutableStateOf(false) }
-    var selectedCities by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var showContactOptions by remember { mutableStateOf(false) }
-    var internalDiscussionEnabled by remember { mutableStateOf(true) }
-    var whatsappDiscussionEnabled by remember { mutableStateOf(true) }
-    val error by viewModel.addProductError.collectAsStateWithLifecycle()
-    val user by viewModel.currentUser.collectAsStateWithLifecycle()
-    val cities = user?.let { CityRepository.citiesFor(it.country) }.orEmpty()
-
-    LaunchedEffect(user?.city) {
-        user?.city?.let { selectedCities = setOf(it) }
+    var mode by remember { mutableStateOf<String?>(null) }
+    var immoType by remember { mutableStateOf<String?>(null) }
+    if (mode == null) {
+        ChoiceScreen(onBack, { mode = "PRODUCT" }, { mode = "IMMO" })
+        return
     }
+    if (mode == "IMMO" && immoType == null) {
+        ChoiceScreen(onBack, { immoType = "IMMO_SALE" }, { immoType = "IMMO_RENT" }, title = "Annonces immobilières", first = "Je veux mettre en vente", second = "Je veux mettre en location")
+        return
+    }
+    if (mode == "PRODUCT") ProductForm(viewModel, onBack, onSaved) else ImmoForm(viewModel, immoType!!, onBack, onSaved)
+}
 
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) pickedImageUri = uri }
-
-    Scaffold(topBar = {
-        TopAppBar(title = { Text("Ajouter un produit") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour") } })
-    }) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp)) {
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, contentAlignment = Alignment.Center) {
-                if (pickedImageUri != null) AsyncImage(model = pickedImageUri, contentDescription = "Photo du produit", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                else Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Filled.AddAPhoto, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary); Text("Ajouter une photo (format 1:1 conseillé)", modifier = Modifier.padding(top = 8.dp)) }
-            }
-            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nom du produit") }, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
-            ExposedDropdownMenuBox(expanded = categoryMenuExpanded, onExpandedChange = { categoryMenuExpanded = it }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                OutlinedTextField(value = category ?: "", onValueChange = {}, readOnly = true, label = { Text("Catégorie") }, placeholder = { Text("Sélectionner une catégorie") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
-                DropdownMenu(expanded = categoryMenuExpanded, onDismissRequest = { categoryMenuExpanded = false }) { ProductCategories.all.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { category = option; categoryMenuExpanded = false }) } }
-            }
-            OutlinedTextField(value = price, onValueChange = { price = it.filter(Char::isDigit) }, label = { Text("Prix (FCFA)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, minLines = 3, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-
-            Text("Visibilité du produit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
-            Text("Votre ville est sélectionnée automatiquement. Vous pouvez ajouter gratuitement jusqu'à 5 autres villes du même pays.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-            user?.city?.let { city -> Text("Ville principale : $city", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 8.dp)) }
-
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { showContactOptions = !showContactOptions }) {
-                        Icon(Icons.Filled.SettingsSuggest, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
-                            Text("Options de discussion", fontWeight = FontWeight.Bold)
-                            Text(
-                                if (internalDiscussionEnabled && whatsappDiscussionEnabled) "Discussion interne + WhatsApp activées"
-                                else if (internalDiscussionEnabled) "Discussion interne activée"
-                                else if (whatsappDiscussionEnabled) "Discussion WhatsApp activée"
-                                else "Toutes les discussions désactivées",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        Text(if (showContactOptions) "Masquer" else "Modifier", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    }
-                    if (showContactOptions) {
-                        Text(
-                            "Ces réglages sont propres à ce produit. Par défaut, les deux moyens de discussion sont activés.",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Option 1 : Discussion interne", fontWeight = FontWeight.Medium)
-                                Text("Permet aux acheteurs de vous écrire dans Yaar-App.", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Switch(checked = internalDiscussionEnabled, onCheckedChange = { internalDiscussionEnabled = it })
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Option 2 : Discussion WhatsApp", fontWeight = FontWeight.Medium)
-                                Text("Permet aux acheteurs d'ouvrir une discussion WhatsApp avec votre boutique.", style = MaterialTheme.typography.bodySmall)
-                            }
-                            Switch(checked = whatsappDiscussionEnabled, onCheckedChange = { whatsappDiscussionEnabled = it })
-                        }
-                    }
-                }
-            }
-
-            if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-            Button(onClick = { showCityPicker = true }, enabled = pickedImageUri != null && category != null && name.isNotBlank() && description.isNotBlank() && price.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Publier le produit") }
+@Composable private fun ChoiceScreen(onBack: () -> Unit, onFirst: () -> Unit, onSecond: () -> Unit, title: String = "Que voulez-vous faire ?", first: String = "Mettre en vente un produit", second: String = "Annonces immobilières") {
+    Scaffold(topBar={TopAppBar(title={Text(title)}, navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"Retour")}})}) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad).padding(24.dp), verticalArrangement=Arrangement.spacedBy(16.dp), horizontalAlignment=Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(30.dp)); Button(onClick=onFirst, Modifier.fillMaxWidth(), shape=RoundedCornerShape(14.dp)){Text(first)}
+            OutlinedButton(onClick=onSecond, Modifier.fillMaxWidth(), shape=RoundedCornerShape(14.dp)){Text(second)}
         }
     }
-
-    if (showCityPicker) {
-        AlertDialog(
-            onDismissRequest = { showCityPicker = false },
-            title = { Text("Où votre produit doit-il être visible ?") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    Text("Sélectionnez jusqu'à 5 villes supplémentaires. Votre ville est toujours incluse.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
-                    cities.forEach { city ->
-                        val selected = city in selectedCities
-                        val isHome = city == user?.city
-                        Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !isHome) { if (selected) selectedCities = selectedCities - city else if (selectedCities.size < 6) selectedCities = selectedCities + city }, verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = selected, onCheckedChange = { checked ->
-                                if (!isHome) {
-                                    if (checked && selectedCities.size < 6) selectedCities = selectedCities + city
-                                    else if (!checked) selectedCities = selectedCities - city
-                                }
-                            }, enabled = isHome || selected || selectedCities.size < 6)
-                            Text(city)
-                            if (isHome) Text("  (ma ville)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val uri = pickedImageUri ?: return@TextButton
-                    val selectedCategory = category ?: return@TextButton
-                    val savedPath = ImageStorage.saveToInternalStorage(context, uri) ?: return@TextButton
-                    viewModel.addProduct(name.trim(), description.trim(), price.toDoubleOrNull() ?: 0.0, savedPath, selectedCategory, selectedCities.toList(), internalDiscussionEnabled, whatsappDiscussionEnabled) { showCityPicker = false; onSaved() }
-                }) { Text("Confirmer et publier") }
-            },
-            dismissButton = { TextButton(onClick = { showCityPicker = false }) { Text("Annuler") } }
-        )
-    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun ProductForm(viewModel:YaarViewModel,onBack:()->Unit,onSaved:()->Unit){
+    val context=LocalContext.current; val user by viewModel.currentUser.collectAsStateWithLifecycle(); var image by remember{mutableStateOf<Uri?>(null)}; var name by remember{mutableStateOf("")}; var desc by remember{mutableStateOf("")}; var price by remember{mutableStateOf("")}; var cat by remember{mutableStateOf<String?>(null)}; var expanded by remember{mutableStateOf(false)}; var showCities by remember{mutableStateOf(false)}; var cities by remember{mutableStateOf(setOf<String>())}; val error by viewModel.addProductError.collectAsStateWithLifecycle(); val picker=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()){if(it!=null)image=it}; LaunchedEffect(user?.city){user?.city?.let{cities=setOf(it)}}
+    Scaffold(topBar={TopAppBar(title={Text("Ajouter un produit")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"Retour")}})}){pad->Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(20.dp)){
+        PhotoBox(image,"Ajouter une photo"){picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))}; OutlinedTextField(name,{name=it},label={Text("Nom du produit")},Modifier.fillMaxWidth().padding(top=12.dp)); ExposedDropdownMenuBox(expanded,{expanded=!expanded}){OutlinedTextField(cat?:"",{},readOnly=true,label={Text("Catégorie")},modifier=Modifier.fillMaxWidth().menuAnchor()); DropdownMenu(expanded,{expanded=false}){ProductCategories.all.forEach{DropdownMenuItem({Text(it)},{cat=it;expanded=false})}}}; OutlinedTextField(price,{price=it.filter(Char::isDigit)},label={Text("Prix (FCFA)")},modifier=Modifier.fillMaxWidth().padding(top=8.dp)); OutlinedTextField(desc,{desc=it},label={Text("Description")},minLines=3,modifier=Modifier.fillMaxWidth().padding(top=8.dp)); if(error!=null)Text(error!!,color=MaterialTheme.colorScheme.error,Modifier.padding(top=8.dp)); Button(onClick={showCities=true},enabled=image!=null&&name.isNotBlank()&&desc.isNotBlank()&&price.isNotBlank()&&cat!=null,modifier=Modifier.fillMaxWidth().padding(top=18.dp)){Text("Publier le produit")}
+    }}
+    if(showCities){AlertDialog(onDismissRequest={showCities=false},title={Text("Villes de visibilité")},text={Column(Modifier.verticalScroll(rememberScrollState())){CityRepository.citiesFor(user!!.country).forEach{c->Row(Modifier.fillMaxWidth().clickable{if(c in cities&&c!=user?.city)cities-=c else if(cities.size<6)cities+=c},verticalAlignment=Alignment.CenterVertically){Checkbox(c in cities,{checked->if(checked)cities+=c else cities-=c});Text(c)}}}},confirmButton={TextButton(onClick={val path=ImageStorage.saveToInternalStorage(context,image!!);if(path!=null){viewModel.addProduct(name.trim(),desc.trim(),price.toDoubleOrNull()?:0.0,path,cat!!,cities.toList(),onSuccess= {showCities=false;onSaved()})}}){Text("Publier")}},dismissButton={TextButton(onClick={showCities=false}){Text("Annuler")}})}
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun ImmoForm(viewModel:YaarViewModel,type:String,onBack:()->Unit,onSaved:()->Unit){val context=LocalContext.current;var first by remember{mutableStateOf<Uri?>(null)};var second by remember{mutableStateOf<Uri?>(null)};var title by remember{mutableStateOf("")};var desc by remember{mutableStateOf("")};val error by viewModel.addProductError.collectAsStateWithLifecycle();val pick=rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()){u->if(u!=null){if(first==null)first=u else second=u}};Scaffold(topBar={TopAppBar(title={Text(if(type=="IMMO_RENT")"Nouvelle annonce — Location" else "Nouvelle annonce — Vente")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"Retour")}})}){pad->Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(20.dp)){Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){PhotoBox(first,"Photo 1"){pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))};PhotoBox(second,"Photo 2"){if(first!=null)pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))}};Text("2 photos maximum",style=MaterialTheme.typography.labelSmall,modifier=Modifier.padding(top=6.dp));OutlinedTextField(title,{title=it},label={Text("Titre de l'annonce")},modifier=Modifier.fillMaxWidth().padding(top=14.dp));OutlinedTextField(desc,{desc=it},label={Text("Description — prix, caractéristiques, localisation, etc.")},minLines=7,modifier=Modifier.fillMaxWidth().padding(top=8.dp));if(error!=null)Text(error!!,color=MaterialTheme.colorScheme.error,Modifier.padding(top=8.dp));Button(onClick={val p1=ImageStorage.saveToInternalStorage(context,first!!);val p2=second?.let{ImageStorage.saveToInternalStorage(context,it)};if(p1!=null)viewModel.addImmoListing(title.trim(),desc.trim(),p1,p2,type){onSaved()}},enabled=first!=null&&title.isNotBlank()&&desc.isNotBlank(),modifier=Modifier.fillMaxWidth().padding(top=18.dp)){Text("Publier l'annonce")}}}}
+
+@Composable private fun PhotoBox(uri:Uri?,label:String,onClick:()->Unit){Box(Modifier.size(150.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick=onClick),contentAlignment=Alignment.Center){if(uri!=null)AsyncImage(uri,label,Modifier.fillMaxSize(),contentScale=ContentScale.Crop)else Column(horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Filled.AddAPhoto,null);Text(label)}}}

@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [User::class, Shop::class, Product::class, CartItem::class, Interest::class, AdCampaign::class],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -53,6 +53,14 @@ abstract class YaarDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE products ADD COLUMN listingType TEXT NOT NULL DEFAULT 'PRODUCT'")
+                db.execSQL("ALTER TABLE products ADD COLUMN secondImageUrl TEXT")
+                db.execSQL("ALTER TABLE shops ADD COLUMN logoChangedAt INTEGER")
+            }
+        }
+
         @Volatile
         private var INSTANCE: YaarDatabase? = null
 
@@ -65,7 +73,7 @@ abstract class YaarDatabase : RoomDatabase() {
                 )
                     // Version 7 ajoute l'identité Firebase stable du compte, le ciblage
                     // multi-villes des produits et les identifiants Firebase des boutiques.
-                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }

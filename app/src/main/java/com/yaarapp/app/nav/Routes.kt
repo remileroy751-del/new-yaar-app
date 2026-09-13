@@ -8,7 +8,8 @@ object Routes {
     const val SIGNUP = "signup"
     const val SECURE_ACCOUNT = "secure_account"
 
-    const val MARKETPLACE = "marketplace"          // "Acheter"
+    const val MARKETPLACE = "marketplace"          // "Produits"
+    const val IMMO = "immo"
     const val SEARCH = "search"                     // recherche par mot-clé + ville
     const val PRODUCT_DETAIL = "product/{productId}"
     const val CART = "cart"

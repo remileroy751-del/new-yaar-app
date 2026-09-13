@@ -231,6 +231,8 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
     /** Liste fixe (voir ProductCategories) — toujours affichée en entier, même sans produit encore publié. */
     val categories: List<String> = ProductCategories.all
 
+    val immoListings: StateFlow<List<Product>> = repository.observeImmoListings().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _selectedCategory = MutableStateFlow<String?>(null)
     val selectedCategory: StateFlow<String?> = _selectedCategory
 
@@ -426,6 +428,22 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
                 is AddProductResult.Error -> _addProductError.value = result.message
             }
         }
+    }
+
+    fun addImmoListing(title: String, description: String, firstImageUrl: String, secondImageUrl: String?, listingType: String, onSuccess: () -> Unit) {
+        val shop = myShop.value ?: return
+        viewModelScope.launch {
+            when (val result = repository.addImmoListing(shop, title, description, firstImageUrl, secondImageUrl, listingType)) {
+                is AddProductResult.Success -> { _addProductError.value = null; onSuccess() }
+                is AddProductResult.LimitReached -> _addProductError.value = null
+                is AddProductResult.Error -> _addProductError.value = result.message
+            }
+        }
+    }
+
+    fun updateShopLogo(logoUrl: String, onSuccess: () -> Unit = {}) {
+        val shop = myShop.value ?: return
+        viewModelScope.launch { repository.updateShopLogo(shop, logoUrl).onSuccess { onSuccess() }.onFailure { _shopNameMessage.value = it.message } }
     }
 
     fun clearAddProductMessages() {

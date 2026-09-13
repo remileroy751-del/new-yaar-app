@@ -57,6 +57,7 @@ fun ProductDetailScreen(
     onChatSupplier: (Product, Shop) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     var product by remember { mutableStateOf<Product?>(null) }
     var shop by remember { mutableStateOf<Shop?>(null) }
     var interestSent by remember { mutableStateOf(false) }
@@ -108,6 +109,14 @@ fun ProductDetailScreen(
                     .aspectRatio(1f),
                 contentScale = ContentScale.Crop
             )
+            p.secondImageUrl?.takeIf { it.isNotBlank() }?.let { second ->
+                AsyncImage(
+                    model = ImageStorage.resolveImageModel(context, second),
+                    contentDescription = "Deuxième photo",
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(top = 8.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
@@ -122,7 +131,7 @@ fun ProductDetailScreen(
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 Text(
-                    text = "${p.price.toLong()} FCFA",
+                    text = if (p.listingType == "PRODUCT") "${p.price.toLong()} FCFA" else if (p.listingType == "IMMO_RENT") "Location" else "Vente",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp)
@@ -156,8 +165,18 @@ fun ProductDetailScreen(
                     modifier = Modifier.padding(top = 16.dp)
                 )
 
+                val isOwnListing = currentUser?.firebaseUid != null && currentUser?.firebaseUid == p.ownerUid
+                if (isOwnListing) {
+                    Card(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                        Text(
+                            if (p.listingType == "PRODUCT") "Vous ne pouvez pas acheter votre propre produit." else "Vous ne pouvez pas acheter ou louer votre propre bien.",
+                            modifier = Modifier.padding(14.dp), fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 val discussionButtons = p.internalDiscussionEnabled || p.whatsappDiscussionEnabled
-                if (discussionButtons) {
+                if (discussionButtons && !isOwnListing) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)

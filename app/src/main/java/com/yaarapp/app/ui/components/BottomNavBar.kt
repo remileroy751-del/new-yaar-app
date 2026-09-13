@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -21,7 +22,8 @@ val bottomNavItems = listOf(
     BottomNavItem(Routes.PROFILE, "Profil", Icons.Filled.Person),
     BottomNavItem(Routes.CONVERSATIONS, "Discussions", Icons.Filled.ChatBubbleOutline),
     BottomNavItem(Routes.MY_SHOP, "Ma boutique", Icons.Filled.Storefront),
-    BottomNavItem(Routes.MARKETPLACE, "Acheter", Icons.Filled.ShoppingBag)
+    BottomNavItem(Routes.MARKETPLACE, "Produits", Icons.Filled.ShoppingBag),
+    BottomNavItem(Routes.IMMO, "Immo", Icons.Filled.Home)
 )
 
 @Composable

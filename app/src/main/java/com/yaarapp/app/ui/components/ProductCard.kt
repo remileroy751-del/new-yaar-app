@@ -67,6 +67,7 @@ fun ProductCard(
                         contentAlignment = Alignment.Center
                     ) { Text("Photo indisponible", style = MaterialTheme.typography.labelMedium) }
                 }
+                if (product.ownerUid == null) { }
                 if (product.isPromoted) {
                     Box(
                         modifier = Modifier
@@ -80,21 +81,32 @@ fun ProductCard(
                 }
             }
             Column(modifier = Modifier.padding(12.dp)) {
+                if (product.listingType != "PRODUCT") {
+                    Text(
+                        text = if (product.listingType == "IMMO_RENT") "LOCATION" else "VENTE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
                 Text(
-                    text = "${product.price.toLong()} FCFA",
+                    text = if (product.listingType == "PRODUCT") "${product.price.toLong()} FCFA" else product.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Text(
+                if (product.listingType == "PRODUCT") Text(
                     text = product.name,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+                if (product.ownerUid != null) {
+                    // Le propriétaire est identifié plus précisément dans l'écran Immo/marketplace.
+                }
                 Text(
-                    text = "${product.shopName} · Disponible à ${product.city}",
+                    text = "${product.shopName} · ${product.city}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,

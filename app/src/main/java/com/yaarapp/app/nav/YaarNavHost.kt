@@ -29,6 +29,7 @@ import com.yaarapp.app.ui.screens.ConversationsScreen
 import com.yaarapp.app.ui.screens.ConversationScreen
 import com.yaarapp.app.ui.screens.LoginScreen
 import com.yaarapp.app.ui.screens.MarketplaceScreen
+import com.yaarapp.app.ui.screens.ImmoScreen
 import com.yaarapp.app.ui.screens.MyAdsScreen
 import com.yaarapp.app.ui.screens.MyShopScreen
 import com.yaarapp.app.ui.screens.NotificationsScreen
@@ -56,7 +57,7 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
     val cartItemCount by viewModel.cartItemCount.collectAsState()
     val termsAccepted by viewModel.termsAccepted.collectAsStateWithLifecycle()
 
-    val mainTabs = listOf(Routes.PROFILE, Routes.CONVERSATIONS, Routes.MY_SHOP, Routes.MARKETPLACE)
+    val mainTabs = listOf(Routes.PROFILE, Routes.CONVERSATIONS, Routes.MY_SHOP, Routes.MARKETPLACE, Routes.IMMO)
     val showBottomBar = currentRoute in mainTabs
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -133,6 +134,9 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                         onCartClick = { navController.navigate(Routes.CART) },
                         onSearchClick = { navController.navigate(Routes.SEARCH) }
                     )
+                }
+                composable(Routes.IMMO) {
+                    ImmoScreen(viewModel = viewModel, onListingClick = { product -> navController.navigate(Routes.productDetail(product.id)) })
                 }
                 composable(Routes.SEARCH) {
                     SearchScreen(

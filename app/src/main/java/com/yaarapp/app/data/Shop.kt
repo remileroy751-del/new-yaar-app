@@ -41,6 +41,8 @@ data class Shop(
     val createdAt: Long = System.currentTimeMillis(),
     /** Dernière modification du nom de la boutique. Null = jamais modifié depuis sa création. */
     val nameChangedAt: Long? = null,
+    /** Dernière modification du logo; changement autorisé tous les 30 jours. */
+    val logoChangedAt: Long? = null,
     /**
      * Identifiant du document Supabase correspondant (auto-généré par Supabase,
      * globalement unique) une fois cette boutique synchronisée en ligne. `null` tant
@@ -49,6 +51,9 @@ data class Shop(
      */
     val remoteId: String? = null
 ) {
+    fun nextLogoChangeAt(): Long = (logoChangedAt ?: createdAt) + 30L * 24L * 60L * 60L * 1000L
+    fun canChangeLogo(now: Long = System.currentTimeMillis()): Boolean = now >= nextLogoChangeAt()
+
     fun nextNameChangeAt(): Long = (nameChangedAt ?: createdAt) + 30L * 24L * 60L * 60L * 1000L
     fun canChangeName(now: Long = System.currentTimeMillis()): Boolean = now >= nextNameChangeAt()
 

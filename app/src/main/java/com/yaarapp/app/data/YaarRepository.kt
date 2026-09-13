@@ -237,6 +237,18 @@ class YaarRepository(context: Context) {
         }
     }
 
+    suspend fun updateShopLogo(shop: Shop, logoUrl: String): Result<Shop> {
+        if (logoUrl.isBlank()) return Result.failure(IllegalArgumentException("Merci de sélectionner un logo."))
+        val now = System.currentTimeMillis()
+        if (!shop.canChangeLogo(now)) return Result.failure(IllegalStateException("Impossible de modifier le logo avant ${formatDate(shop.nextLogoChangeAt())}."))
+        return runCatching {
+            val updated = shop.copy(logoUrl = logoUrl, logoChangedAt = now)
+            val synced = supabaseSync.syncShopNow(updated)
+            shopDao.update(synced)
+            synced
+        }
+    }
+
     private fun formatDate(timestamp: Long): String =
         java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.FRENCH).format(java.util.Date(timestamp))
 
@@ -329,6 +341,16 @@ class YaarRepository(context: Context) {
         } catch (e: Exception) {
             AddProductResult.Error(e.message ?: "Impossible de publier le produit. Vérifiez votre connexion Internet.")
         }
+    }
+
+    suspend fun addImmoListing(
+        shop: Shop, title: String, description: String, firstImageUrl: String, secondImageUrl: String?, listingType: String
+    ): AddProductResult {
+        if (title.isBlank() || description.isBlank() || firstImageUrl.isBlank()) return AddProductResult.Error("Merci de renseigner le titre, la description et au moins une photo.")
+        if (listingType !in listOf("IMMO_SALE", "IMMO_RENT")) return AddProductResult.Error("Type d'annonce immobilière invalide.")
+        val id = productDao.insert(Product(shopId=shop.id, shopName=shop.name, name=title.trim(), description=description.trim(), price=1.0, imageUrl=firstImageUrl, category="Immobilier", country=shop.country, city=shop.city, availableCities=listOf(shop.city), ownerUid=shop.ownerUid, shopRemoteId=shop.remoteId, listingType=listingType, secondImageUrl=secondImageUrl))
+        val created = productDao.getById(id.toInt()) ?: return AddProductResult.Error("Impossible de préparer l'annonce.")
+        return try { supabaseSync.syncProductNow(created); AddProductResult.Success } catch(e: Exception) { AddProductResult.Error(e.message ?: "Impossible de publier l'annonce.") }
     }
 
     suspend fun deleteProduct(product: Product) {
@@ -450,6 +472,8 @@ class YaarRepository(context: Context) {
     // ---------- Marketplace ("Acheter") ----------
 
     fun observeMarketplaceProducts(): Flow<List<Product>> = productDao.observeAllActive()
+
+    fun observeImmoListings(): Flow<List<Product>> = productDao.observeAllImmo()
 
     fun observeCategories(): Flow<List<String>> = productDao.observeCategories()
 

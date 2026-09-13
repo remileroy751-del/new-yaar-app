@@ -60,6 +60,10 @@ data class Product(
     /** Contrôle les canaux de discussion exposés aux acheteurs pour ce produit. */
     val internalDiscussionEnabled: Boolean = true,
     val whatsappDiscussionEnabled: Boolean = true,
+    /** Type de publication: PRODUCT, IMMO_SALE ou IMMO_RENT. */
+    val listingType: String = "PRODUCT",
+    /** Deuxième photo optionnelle pour une annonce immobilière. */
+    val secondImageUrl: String? = null,
     /**
      * Identifiant du document Supabase correspondant une fois ce produit synchronisé
      * en ligne (voir [Shop.remoteId] pour le principe complet).

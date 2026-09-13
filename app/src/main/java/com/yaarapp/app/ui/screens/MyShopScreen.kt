@@ -86,6 +86,8 @@ fun MyShopScreen(
     val shopNameMessage by viewModel.shopNameMessage.collectAsStateWithLifecycle()
     var showRenameDialog by remember { mutableStateOf(false) }
     var newShopName by remember { mutableStateOf("") }
+    var pickedLogoUri by remember { mutableStateOf<Uri?>(null) }
+    val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { pickedLogoUri = it }
 
     // Tant qu'aucune boutique n'existe, on affiche uniquement le formulaire de création.
     // Aucun accès forcé à shop n'est effectué ici : cela évite les NPE lors de la
@@ -389,6 +391,10 @@ fun MyShopScreen(
                         else "Impossible de modifier le nom de votre boutique avant ${formatShopDate(currentShop.nextNameChangeAt())}.",
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    Text("Logo de la boutique", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+                    Text(if (currentShop.canChangeLogo()) "Le logo peut être modifié maintenant." else "Logo modifiable après ${formatShopDate(currentShop.nextLogoChangeAt())}.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { pickLogo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = currentShop.canChangeLogo(), modifier = Modifier.padding(top = 6.dp)) { Text(if (pickedLogoUri == null) "Choisir un nouveau logo" else "Logo sélectionné") }
+
                     OutlinedTextField(
                         value = newShopName,
                         onValueChange = { newShopName = it },
@@ -403,9 +409,10 @@ fun MyShopScreen(
                 TextButton(
                     onClick = {
                         viewModel.renameShop(newShopName)
+                        pickedLogoUri?.let { uri -> ImageStorage.saveToInternalStorage(LocalContext.current, uri)?.let { viewModel.updateShopLogo(it) } }
                         showRenameDialog = false
                     },
-                    enabled = currentShop.canChangeName() && newShopName.trim().isNotBlank() && newShopName.trim() != currentShop.name.trim()
+                    enabled = (currentShop.canChangeName() && newShopName.trim().isNotBlank() && newShopName.trim() != currentShop.name.trim()) || (currentShop.canChangeLogo() && pickedLogoUri != null)
                 ) { Text("Enregistrer") }
             },
             dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Annuler") } }
@@ -425,6 +432,7 @@ private fun CreateShopForm(
     var name by remember { mutableStateOf("") }
     var activity by remember { mutableStateOf("") }
     var pickedLogoUri by remember { mutableStateOf<Uri?>(null) }
+    val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { pickedLogoUri = it }
     var selectedCategories by remember { mutableStateOf(setOf<String>()) }
 
     val pickLogo = rememberLauncherForActivityResult(
