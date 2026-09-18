@@ -28,6 +28,8 @@ data class Shop(
      * Utilisez la propriété [maxProducts] pour connaître la limite effective.
      */
     val extraProductSlots: Int = 0,
+    /** Capacité supplémentaire d’annonces immobilières achetée (0 = 5, 15 = 20). */
+    val extraImmoSlots: Int = 0,
     // ---------- Certification de la boutique ----------
     val certificationStatus: CertificationStatus = CertificationStatus.NONE,
     /** Photos recto/verso de la pièce d'identité envoyées lors de la demande de certification. */

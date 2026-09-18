@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Yaar-App · Super Admin</title>
+  <meta name="description" content="Interface d'administration sécurisée de Yaar-App">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--orange:#ff7200;--orange2:#ff8a22;--green:#159447;--ink:#182018;--muted:#6d756d;--bg:#f7f5f0;--card:#fff;--line:#e8e3da;--danger:#c62828;--shadow:0 12px 30px rgba(30,30,20,.08)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    button,input,select{font:inherit} button{cursor:pointer}.hidden{display:none!important}
+    .login{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 20% 10%,#fff 0 22%,transparent 45%),linear-gradient(145deg,#fff8ee,#f6f7f2)}
+    .login-card{width:min(430px,100%);background:#fff;border:1px solid var(--line);border-radius:24px;padding:30px;box-shadow:var(--shadow)}
+    .brand{display:flex;align-items:center;gap:12px}.brand img{width:58px;height:58px;object-fit:contain;border-radius:16px}.brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:var(--muted)}
+    .field{margin-top:16px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}.field input{width:100%;padding:12px 13px;border:1px solid #d9d5cc;border-radius:12px;outline:none}.field input:focus{border-color:var(--orange);box-shadow:0 0 0 3px #ff72001a}
+    .primary{border:0;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#fff;padding:12px 16px;border-radius:12px;font-weight:800}.secondary{border:1px solid #d9d5cc;background:#fff;color:var(--ink);padding:10px 14px;border-radius:10px;font-weight:700}.danger{border:0;background:#fff0f0;color:var(--danger);padding:9px 12px;border-radius:9px;font-weight:800}.success{color:var(--green)}
+    .login .primary{width:100%;margin-top:20px}.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:14px}.error{color:var(--danger);font-size:13px;margin-top:12px}
+    .app{min-height:100vh}.topbar{height:74px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:10}.topbar .brand img{width:46px;height:46px}.topbar .brand h1{font-size:19px}.topbar .right{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+    .wrap{max-width:1450px;margin:auto;padding:26px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:22px}.hero h2{margin:0;font-size:28px}.hero p{margin:7px 0 0;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 5px 18px rgba(30,30,20,.04)}.stat .k{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em}.stat .v{font-size:30px;font-weight:900;margin-top:7px}.stat.orange{border-top:4px solid var(--orange)}.stat.green{border-top:4px solid var(--green)}
+    .section{margin-top:22px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 5px 18px rgba(30,30,20,.04);overflow:hidden}.section-head{padding:17px 19px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}.section-head h3{margin:0;font-size:17px}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.toolbar input,.toolbar select{padding:9px 11px;border:1px solid #d9d5cc;border-radius:10px;background:#fff;min-width:170px}
+    .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:850px}th,td{padding:12px 14px;border-bottom:1px solid #eee9e0;text-align:left;font-size:13px;vertical-align:middle}th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#fcfbf8}tr:last-child td{border-bottom:0}.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:900}.badge.green{background:#eaf8ef;color:#11753a}.badge.orange{background:#fff1e5;color:#a74a00}.badge.gray{background:#f0f0ed;color:#62665f}.badge.red{background:#ffecec;color:#a31e1e}
+    .countries{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:18px}.country{border:1px solid var(--line);border-radius:13px;padding:13px;display:flex;justify-content:space-between}.country b{color:var(--orange)}
+    .empty{padding:28px;text-align:center;color:var(--muted)}.footer{padding:30px 0;color:var(--muted);font-size:12px;text-align:center}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.countries{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.topbar{padding:0 14px}.wrap{padding:16px}.hero{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr 1fr}.countries{grid-template-columns:1fr}.topbar .right span{display:none}}
+  </style>
+</head>
+<body>
+  <div id="loginView" class="login">
+    <div class="login-card">
+      <div class="brand"><img src="admin/yaar-logo.jpeg" alt="Yaar-App"><div><h1>Yaar-App</h1><p>Super Admin sécurisé</p></div></div>
+      <div class="field"><label>Email administrateur</label><input id="email" type="email" autocomplete="username" placeholder="admin@exemple.com"></div>
+      <div class="field"><label>Mot de passe</label><input id="password" type="password" autocomplete="current-password" placeholder="Votre mot de passe"></div>
+      <button id="loginBtn" class="primary">Se connecter</button>
+      <div id="loginError" class="error"></div>
+      <div class="note">Cette interface n'utilise jamais la clé service_role. L'accès est protégé par Supabase Authentication et la table des administrateurs.</div>
+    </div>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <header class="topbar"><div class="brand"><img src="admin/yaar-logo.jpeg" alt="Yaar-App"><div><h1>Yaar-App · Administration</h1></div></div><div class="right"><span id="adminEmail"></span><button id="logoutBtn" class="secondary">Déconnexion</button></div></header>
+    <main class="wrap">
+      <div class="hero"><div><h2>Tableau de bord</h2><p>Modération, boutiques vérifiées et statistiques de la plateforme.</p></div><button id="refreshBtn" class="primary">Actualiser</button></div>
+      <div class="grid">
+        <div class="stat orange"><div class="k">Utilisateurs</div><div id="usersTotal" class="v">—</div></div>
+        <div class="stat green"><div class="k">Boutiques</div><div id="shopsTotal" class="v">—</div></div>
+        <div class="stat orange"><div class="k">Produits actifs</div><div id="productsTotal" class="v">—</div></div>
+        <div class="stat green"><div class="k">Annonces immo actives</div><div id="immoTotal" class="v">—</div></div>
+      </div>
+
+      <section class="section"><div class="section-head"><h3>Utilisateurs par pays</h3><span class="badge gray">Données Supabase</span></div><div id="countries" class="countries"></div></section>
+
+      <section class="section"><div class="section-head"><h3>Utilisateurs</h3><div class="toolbar"><input id="userSearch" placeholder="Rechercher nom / email / pays…"></div></div><div class="table-wrap"><table><thead><tr><th>Utilisateur</th><th>Email</th><th>Pays / ville</th><th>Inscrit le</th><th>Action</th></tr></thead><tbody id="usersBody"></tbody></table></div></section>
+
+      <section class="section"><div class="section-head"><h3>Boutiques · badge de vérification</h3><div class="toolbar"><input id="shopSearch" placeholder="Rechercher une boutique…"><select id="shopFilter"><option value="ALL">Toutes</option><option value="CERTIFIED">Vérifiées</option><option value="PENDING">En attente</option><option value="NONE">Non vérifiées</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Boutique</th><th>Propriétaire</th><th>Pays / ville</th><th>Statut</th><th>Action</th></tr></thead><tbody id="shopsBody"></tbody></table></div></section>
+
+      <section class="section"><div class="section-head"><h3>Modération des produits et annonces immobilières</h3><div class="toolbar"><input id="productSearch" placeholder="Rechercher titre / boutique…"><select id="productFilter"><option value="ALL">Tous</option><option value="PRODUCT">Produits</option><option value="IMMO">Immobilier</option><option value="ACTIVE">Actifs</option><option value="INACTIVE">Désactivés</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Publication</th><th>Boutique</th><th>Pays / ville</th><th>Type</th><th>Statut</th><th>Publié le</th><th>Action</th></tr></thead><tbody id="productsBody"></tbody></table></div></section>
+      <div class="footer">Yaar-App · Interface Super Admin · Les actions sensibles sont contrôlées côté Supabase.</div>
+    </main>
+  </div>
+
+<script>
+const SUPABASE_URL='https://lhqnjzuwndgtcjeyyjwj.supabase.co';
+const SUPABASE_KEY='sb_publishable_uMFmqZ90XeOjcGaRFNl5Ig_aboyZD1q';
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let users=[],shops=[],products=[];
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const date=v=>v?new Date(v).toLocaleDateString('fr-FR'):'—';
+function setLoginError(m){$('loginError').textContent=m||''}
+async function login(){
+  setLoginError(''); const email=$('email').value.trim().toLowerCase(), password=$('password').value;
+  if(!email||!password){setLoginError('Renseignez l’email et le mot de passe.');return}
+  $('loginBtn').disabled=true;$('loginBtn').textContent='Connexion…';
+  const {error}=await db.auth.signInWithPassword({email,password});
+  $('loginBtn').disabled=false;$('loginBtn').textContent='Se connecter';
+  if(error){setLoginError('Connexion refusée : '+error.message);return}
+  await showApp();
+}
+async function showApp(){
+  const {data:{user}}=await db.auth.getUser(); if(!user)return;
+  $('adminEmail').textContent=user.email||'';
+  // Vérification explicite du rôle côté Supabase, sans exposer la table yaar_admins.
+  const role=await db.rpc('is_yaar_admin');
+  if(role.error || role.data !== true){await db.auth.signOut();setLoginError('Ce compte n’est pas autorisé comme administrateur. Vérifiez yaar_admins dans Supabase.');return}
+  $('loginView').classList.add('hidden');$('appView').classList.remove('hidden');await refresh();
+}
+async function refresh(){
+  const [u,s,p]=await Promise.all([
+    db.from('users').select('id,first_name,email,country,city,created_at').order('created_at',{ascending:false}),
+    db.from('shops').select('id,owner_uid,name,country,city,certification_status,created_at').order('created_at',{ascending:false}),
+    db.from('products').select('id,shop_id,owner_uid,shop_name,name,description,country,city,is_active,listing_type,created_at').order('created_at',{ascending:false}).limit(500)
+  ]);
+  if(u.error||s.error||p.error){alert('Erreur de chargement : '+(u.error?.message||s.error?.message||p.error?.message));return}
+  const users=u.data||[];shops=s.data||[];products=p.data||[];
+  $('usersTotal').textContent=users.length.toLocaleString('fr-FR');$('shopsTotal').textContent=shops.length.toLocaleString('fr-FR');
+  $('productsTotal').textContent=products.filter(x=>x.is_active&&x.listing_type==='PRODUCT').length.toLocaleString('fr-FR');
+  $('immoTotal').textContent=products.filter(x=>x.is_active&&['IMMO_SALE','IMMO_RENT'].includes(x.listing_type)).length.toLocaleString('fr-FR');
+  renderCountries(users);renderUsers();renderShops();renderProducts();
+}
+function renderCountries(users){const m={};users.forEach(u=>m[u.country]=(m[u.country]||0)+1);const names=Object.entries(m).sort((a,b)=>b[1]-a[1]);$('countries').innerHTML=names.length?names.map(([k,v])=>`<div class="country"><span>${esc(k.replaceAll('_',' '))}</span><b>${v}</b></div>`).join(''):'<div class="empty">Aucun utilisateur.</div>'}
+function renderUsers(){const q=$('userSearch').value.trim().toLowerCase();const list=users.filter(u=>!q||(`${u.first_name} ${u.email} ${u.country} ${u.city}`).toLowerCase().includes(q));$('usersBody').innerHTML=list.length?list.map(u=>`<tr><td><b>${esc(u.first_name)}</b></td><td>${esc(u.email||'—')}</td><td>${esc(u.country)} · ${esc(u.city)}</td><td>${date(u.created_at)}</td><td><button class="danger" onclick="deleteUser('${u.id}','${esc(u.first_name).replace(/'/g,"\'")}')">Supprimer</button></td></tr>`).join(''):'<tr><td colspan="5" class="empty">Aucun utilisateur correspondant.</td></tr>'}
+async function deleteUser(id,name){if(!confirm(`Supprimer définitivement le compte « ${name} » ?\n\nCette action supprime son compte Supabase et les données liées.`))return;const {error}=await db.rpc('admin_delete_user',{p_user_id:id});if(error){alert('Suppression refusée : '+error.message);return}await refresh()}
+function renderShops(){const q=$('shopSearch').value.trim().toLowerCase(),f=$('shopFilter').value;let list=shops.filter(s=>(f==='ALL'||s.certification_status===f)&&(!q||(`${s.name} ${s.country} ${s.city}`).toLowerCase().includes(q)));$('shopsBody').innerHTML=list.length?list.map(s=>`<tr><td><b>${esc(s.name)}</b><br><span class="badge gray">${date(s.created_at)}</span></td><td>${esc(s.owner_uid).slice(0,8)}…</td><td>${esc(s.country)} · ${esc(s.city)}</td><td>${statusBadge(s.certification_status)}</td><td>${s.certification_status==='CERTIFIED'?`<button class="secondary" onclick="verifyShop('${s.id}',false)">Retirer badge</button>`:`<button class="primary" onclick="verifyShop('${s.id}',true)">✓ Vérifier</button>`}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">Aucune boutique correspondante.</td></tr>'}
+function statusBadge(s){const cls=s==='CERTIFIED'?'green':s==='PENDING'?'orange':'gray';const txt=s==='CERTIFIED'?'✓ Vérifiée':s==='PENDING'?'En étude':'Non vérifiée';return `<span class="badge ${cls}">${txt}</span>`}
+function renderProducts(){const q=$('productSearch').value.trim().toLowerCase(),f=$('productFilter').value;let list=products.filter(p=>{const text=`${p.name} ${p.shop_name} ${p.country} ${p.city}`.toLowerCase();if(q&&!text.includes(q))return false;if(f==='PRODUCT'&&p.listing_type!=='PRODUCT')return false;if(f==='IMMO'&&!['IMMO_SALE','IMMO_RENT'].includes(p.listing_type))return false;if(f==='ACTIVE'&&!p.is_active)return false;if(f==='INACTIVE'&&p.is_active)return false;return true});$('productsBody').innerHTML=list.length?list.map(p=>`<tr><td><b>${esc(p.name)}</b><br><small>${esc((p.description||'').slice(0,80))}${(p.description||'').length>80?'…':''}</small></td><td>${esc(p.shop_name)}</td><td>${esc(p.country)} · ${esc(p.city)}</td><td>${p.listing_type==='PRODUCT'?'<span class="badge orange">Produit</span>':`<span class="badge green">${p.listing_type==='IMMO_SALE'?'Immo · Vente':'Immo · Location'}</span>`}</td><td>${p.is_active?'<span class="badge green">Actif</span>':'<span class="badge gray">Désactivé</span>'}</td><td>${date(p.created_at)}</td><td><button class="danger" onclick="deleteProduct('${p.id}','${esc(p.name).replace(/'/g,"\\'")}')">Supprimer</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">Aucune publication correspondante.</td></tr>'}
+async function verifyShop(id,on){if(!confirm(on?'Confirmer l’activation du badge de vérification ?':'Retirer le badge de vérification ?'))return;const {error}=await db.rpc('admin_set_shop_certified',{p_shop_id:id,p_certified:on});if(error){alert('Action refusée : '+error.message);return}await refresh()}
+async function deleteProduct(id,name){if(!confirm(`Supprimer définitivement « ${name} » ?\n\nCette action retire la publication de Yaar-App.`))return;const {error}=await db.from('products').delete().eq('id',id);if(error){alert('Suppression refusée : '+error.message);return}await refresh()}
+$('loginBtn').onclick=login;$('password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('refreshBtn').onclick=refresh;$('logoutBtn').onclick=async()=>{await db.auth.signOut();location.reload()};$('userSearch').oninput=renderUsers;$('shopSearch').oninput=renderShops;$('shopFilter').onchange=renderShops;$('productSearch').oninput=renderProducts;$('productFilter').onchange=renderProducts;
+(async()=>{const {data:{session}}=await db.auth.getSession();if(session)await showApp()})();
+</script>
+</body>
+</html>

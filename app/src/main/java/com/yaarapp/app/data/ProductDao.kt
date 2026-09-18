@@ -47,6 +47,9 @@ interface ProductDao {
     @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1 AND listingType = 'PRODUCT'")
     suspend fun countActiveForShop(shopId: Int): Int
 
+    @Query("SELECT COUNT(*) FROM products WHERE shopId = :shopId AND isActive = 1 AND listingType IN ('IMMO_SALE','IMMO_RENT')")
+    suspend fun countActiveImmoForShop(shopId: Int): Int
+
     @Insert
     suspend fun insert(product: Product): Long
 

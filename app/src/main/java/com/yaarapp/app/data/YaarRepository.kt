@@ -293,6 +293,14 @@ class YaarRepository(context: Context) {
         supabaseSync.syncShop(updated)
     }
 
+    /** Active l’extension immobilière après confirmation de paiement. */
+    suspend fun purchaseExtraImmoSlots(shop: Shop) {
+        if (shop.extraImmoSlots > 0) return
+        val updated = shop.copy(extraImmoSlots = ShopLimits.EXTRA_IMMO_SLOTS)
+        shopDao.update(updated)
+        supabaseSync.syncShop(updated)
+    }
+
     fun observeShopProducts(shopId: Int): Flow<List<Product>> = productDao.observeByShop(shopId)
 
     suspend fun addProduct(
@@ -348,6 +356,8 @@ class YaarRepository(context: Context) {
     ): AddProductResult {
         if (title.isBlank() || description.isBlank() || firstImageUrl.isBlank()) return AddProductResult.Error("Merci de renseigner le titre, la description et au moins une photo.")
         if (listingType !in listOf("IMMO_SALE", "IMMO_RENT")) return AddProductResult.Error("Type d'annonce immobilière invalide.")
+        val activeImmoCount = productDao.countActiveImmoForShop(shop.id)
+        if (activeImmoCount >= shop.maxImmoListings) return AddProductResult.LimitReached(shop.maxImmoListings)
         val id = productDao.insert(Product(shopId=shop.id, shopName=shop.name, name=title.trim(), description=description.trim(), price=1.0, imageUrl=firstImageUrl, category="Immobilier", country=shop.country, city=shop.city, availableCities=listOf(shop.city), ownerUid=shop.ownerUid, shopRemoteId=shop.remoteId, listingType=listingType, secondImageUrl=secondImageUrl))
         val created = productDao.getById(id.toInt()) ?: return AddProductResult.Error("Impossible de préparer l'annonce.")
         return try { supabaseSync.syncProductNow(created); AddProductResult.Success } catch(e: Exception) { AddProductResult.Error(e.message ?: "Impossible de publier l'annonce.") }

@@ -12,6 +12,10 @@ object ShopLimits {
     const val FREE_PRODUCTS = 5
     const val EXTRA_PACK_PRODUCTS = 15 // 5 + 15 = 20 produits actifs au total
     const val EXTRA_PACK_PRICE_FCFA = 5000
+
+    const val FREE_IMMO_LISTINGS = 5
+    const val EXTRA_IMMO_SLOTS = 15
+    const val IMMO_UPGRADE_PRICE_FCFA = 5000
 }
 
 /** Nombre maximum de produits actifs autorisés pour cette boutique (gratuit + capacité achetée). */
@@ -46,3 +50,7 @@ object AdPricing {
     fun expositionsPerDay(expositions: Int, days: Int): Int =
         if (days <= 0) expositions else ((expositions + days - 1) / days)
 }
+
+/** Nombre maximum d’annonces immobilières actives autorisées. */
+val Shop.maxImmoListings: Int
+    get() = ShopLimits.FREE_IMMO_LISTINGS + extraImmoSlots

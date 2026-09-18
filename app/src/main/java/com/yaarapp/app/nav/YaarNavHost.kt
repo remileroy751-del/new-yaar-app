@@ -223,7 +223,8 @@ fun YaarNavHost(viewModelFactory: YaarViewModelFactory) {
                     AddProductScreen(
                         viewModel = viewModel,
                         onBack = { navController.popBackStack() },
-                        onSaved = { navController.popBackStack() }
+                        onSaved = { navController.popBackStack() },
+                        onUpgradeImmo = { viewModel.requestImmoCapacityUpgrade(); navController.navigate(Routes.PAYDUNYA_CHECKOUT) }
                     )
                 }
                 composable(Routes.PLANS) {

@@ -430,15 +430,24 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
         }
     }
 
+    private val _immoLimitReached = MutableStateFlow<Int?>(null)
+    val immoLimitReached: StateFlow<Int?> = _immoLimitReached
+
+    fun clearImmoLimitReached() { _immoLimitReached.value = null }
+
     fun addImmoListing(title: String, description: String, firstImageUrl: String, secondImageUrl: String?, listingType: String, onSuccess: () -> Unit) {
         val shop = myShop.value ?: return
         viewModelScope.launch {
             when (val result = repository.addImmoListing(shop, title, description, firstImageUrl, secondImageUrl, listingType)) {
-                is AddProductResult.Success -> { _addProductError.value = null; onSuccess() }
-                is AddProductResult.LimitReached -> _addProductError.value = null
+                is AddProductResult.Success -> { _addProductError.value = null; _immoLimitReached.value = null; onSuccess() }
+                is AddProductResult.LimitReached -> { _addProductError.value = null; _immoLimitReached.value = result.maxProducts }
                 is AddProductResult.Error -> _addProductError.value = result.message
             }
         }
+    }
+
+    fun requestImmoCapacityUpgrade() {
+        _pendingPayment.value = PendingPayment.ImmoCapacityUpgrade
     }
 
     fun updateShopLogo(logoUrl: String, onSuccess: () -> Unit = {}) {
@@ -483,6 +492,13 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
             override val amountFcfa get() = ShopLimits.EXTRA_PACK_PRICE_FCFA
             override val description get() =
                 "Capacité +${ShopLimits.EXTRA_PACK_PRODUCTS} produits (5 → ${ShopLimits.FREE_PRODUCTS + ShopLimits.EXTRA_PACK_PRODUCTS}) — Yaar-App"
+        }
+
+        /** Extension immobilière : 5 → 20 annonces immobilières actives. */
+        object ImmoCapacityUpgrade : PendingPayment() {
+            override val amountFcfa get() = ShopLimits.IMMO_UPGRADE_PRICE_FCFA
+            override val description get() =
+                "Capacité annonces immobilières +${ShopLimits.EXTRA_IMMO_SLOTS} (5 → ${ShopLimits.FREE_IMMO_LISTINGS + ShopLimits.EXTRA_IMMO_SLOTS}) — Yaar-App"
         }
 
         /** Bouton "Promouvoir mes produits" : campagne dont le prix dépend du nombre d'expositions choisi. */
@@ -561,6 +577,9 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
             is PendingPayment.ProductCapacityUpgrade -> PayDunyaCreateRequest(
                 purpose = "PRODUCT_CAPACITY", amountFcfa = payment.amountFcfa, description = payment.description, shopId = shop?.remoteId
             )
+            is PendingPayment.ImmoCapacityUpgrade -> PayDunyaCreateRequest(
+                purpose = "PRODUCT_CAPACITY", amountFcfa = payment.amountFcfa, description = payment.description, shopId = shop?.remoteId
+            )
             is PendingPayment.ProductPromotion -> PayDunyaCreateRequest(
                 purpose = "PRODUCT_PROMOTION", amountFcfa = payment.amountFcfa, description = payment.description,
                 productId = payment.product.remoteId, shopId = shop?.remoteId, expositions = payment.expositions, durationDays = payment.days
@@ -595,6 +614,10 @@ class YaarViewModel(private val repository: YaarRepository) : ViewModel() {
                 is PendingPayment.ProductCapacityUpgrade -> {
                     val shop = myShop.value
                     if (shop != null) repository.purchaseExtraProductSlots(shop)
+                }
+                is PendingPayment.ImmoCapacityUpgrade -> {
+                    val shop = myShop.value
+                    if (shop != null) repository.purchaseExtraImmoSlots(shop)
                 }
                 is PendingPayment.ProductPromotion -> {
                     val shop = myShop.value

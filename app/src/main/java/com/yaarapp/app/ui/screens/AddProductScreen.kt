@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yaarapp.app.data.CityRepository
 import com.yaarapp.app.data.ProductCategories
+import com.yaarapp.app.data.maxImmoListings
 import com.yaarapp.app.util.ImageStorage
 import com.yaarapp.app.viewmodel.YaarViewModel
 
@@ -160,6 +161,18 @@ fun ProductForm(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Uni
         }
     }
 
+    if (immoLimit != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearImmoLimitReached() },
+            title = { Text("Limite d'annonces atteinte") },
+            text = { Text("Votre capacité actuelle est de ${immoLimit} annonces immobilières. Passez à 20 annonces pour 5 000 FCFA. Les paiements seront activés le 01/11/2026.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearImmoLimitReached(); onUpgradeImmo() }) { Text("Voir le forfait") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.clearImmoLimitReached() }) { Text("Plus tard") } }
+        )
+    }
+
     if (showCityPicker) {
         AlertDialog(
             onDismissRequest = { showCityPicker = false },
@@ -199,7 +212,7 @@ fun ProductForm(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Uni
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Unit) {
+fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Unit, onUpgradeImmo: () -> Unit = {}) {
     var mode by remember { mutableStateOf<String?>(null) }
     var immoType by remember { mutableStateOf<String?>(null) }
 
@@ -221,7 +234,7 @@ fun AddProductScreen(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -
             onSecond = { immoType = "IMMO_RENT" }
         )
         mode == "PRODUCT" -> ProductForm(viewModel, onBack, onSaved)
-        else -> ImmoForm(viewModel, immoType!!, onBack, onSaved)
+        else -> ImmoForm(viewModel, immoType!!, onBack, onSaved, onUpgradeImmo)
     }
 }
 
@@ -262,7 +275,8 @@ private fun ImmoForm(
     viewModel: YaarViewModel,
     type: String,
     onBack: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    onUpgradeImmo: () -> Unit
 ) {
     val context = LocalContext.current
     var firstImage by remember { mutableStateOf<Uri?>(null) }
@@ -270,6 +284,8 @@ private fun ImmoForm(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     val error by viewModel.addProductError.collectAsStateWithLifecycle()
+    val immoLimit by viewModel.immoLimitReached.collectAsStateWithLifecycle()
+    val shop by viewModel.myShop.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             if (firstImage == null) firstImage = uri else if (secondImage == null) secondImage = uri
@@ -294,6 +310,17 @@ private fun ImmoForm(
                 }
             }
             Text("2 photos maximum", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text("Publications immobilières", fontWeight = FontWeight.Bold)
+                    Text("Capacité actuelle : ${shop?.maxImmoListings ?: 5} annonces immobilières actives.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                    Text("Forfait gratuit : 5 annonces · Extension : jusqu'à 20 annonces pour 5 000 FCFA", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },

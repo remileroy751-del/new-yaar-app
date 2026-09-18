@@ -593,6 +593,7 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         @SerialName("activity_description") val activityDescription: String = "",
         val categories: List<String> = emptyList(),
         @SerialName("extra_product_slots") val extraProductSlots: Int = 0,
+        @SerialName("extra_immo_slots") val extraImmoSlots: Int = 0,
         @SerialName("certification_status") val certificationStatus: String = "NONE",
         @SerialName("id_card_front_url") val idCardFrontUrl: String? = null,
         @SerialName("id_card_back_url") val idCardBackUrl: String? = null,
@@ -605,10 +606,10 @@ class SupabaseSync(context: Context, private val db: YaarDatabase) {
         @SerialName("id_card_front_storage_path") val idCardFrontStoragePath: String? = null,
         @SerialName("id_card_back_storage_path") val idCardBackStoragePath: String? = null
     ) {
-        fun toDomain(localId: Int, ownerId: Int) = Shop(localId, ownerId, ownerUid, name, whatsappNumber, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, logoUrl, activityDescription, categories, extraProductSlots, runCatching { CertificationStatus.valueOf(certificationStatus) }.getOrDefault(CertificationStatus.NONE), idCardFrontUrl, idCardBackUrl, certificationRequestedAt?.toEpochMillis(), certificationPaidAt?.toEpochMillis(), certificationExpiresAt?.toEpochMillis(), createdAt?.toEpochMillis() ?: System.currentTimeMillis(), nameChangedAt?.toEpochMillis(), logoChangedAt?.toEpochMillis(), id)
+        fun toDomain(localId: Int, ownerId: Int) = Shop(localId, ownerId, ownerUid, name, whatsappNumber, runCatching { Country.valueOf(country) }.getOrDefault(Country.TOGO), city, logoUrl, activityDescription, categories, extraProductSlots, extraImmoSlots, runCatching { CertificationStatus.valueOf(certificationStatus) }.getOrDefault(CertificationStatus.NONE), idCardFrontUrl, idCardBackUrl, certificationRequestedAt?.toEpochMillis(), certificationPaidAt?.toEpochMillis(), certificationExpiresAt?.toEpochMillis(), createdAt?.toEpochMillis() ?: System.currentTimeMillis(), nameChangedAt?.toEpochMillis(), logoChangedAt?.toEpochMillis(), id)
         companion object { fun from(s: Shop) = ShopRow(
             s.remoteId ?: error("ID boutique manquant"), s.ownerUid ?: error("UID manquant"), s.name, s.whatsappNumber, s.country.name, s.city,
-            s.logoUrl, s.logoUrl?.let { extractStorageObjectPath(it) }, s.activityDescription, s.categories, s.extraProductSlots, s.certificationStatus.name,
+            s.logoUrl, s.logoUrl?.let { extractStorageObjectPath(it) }, s.activityDescription, s.categories, s.extraProductSlots, s.extraImmoSlots, s.certificationStatus.name,
             null, null, s.certificationRequestedAt?.toIso(), s.certificationPaidAt?.toIso(), s.certificationExpiresAt?.toIso(), s.createdAt.toIso(), s.nameChangedAt?.toIso(), s.logoChangedAt?.toIso(),
             s.idCardFrontUrl?.takeIf { !it.startsWith("http") }, s.idCardBackUrl?.takeIf { !it.startsWith("http") }
         ) }
