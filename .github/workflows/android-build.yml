@@ -29,32 +29,50 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      # GitHub-hosted runners already provide a current Android SDK.
-      # We deliberately do NOT use android-actions/setup-android@v3 here:
-      # that action currently attempts to install the obsolete SDK package
-      # "tools", which causes sdkmanager to exit with code 1.
+      # GitHub runners have the Android SDK preinstalled, but sdkmanager
+      # is not necessarily on PATH. Locate it explicitly instead of using
+      # android-actions/setup-android, which previously failed on this repo.
       - name: Configure Android SDK
         shell: bash
         run: |
-          set -e
-          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-          echo "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
-          echo "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/emulator" >> "$GITHUB_PATH"
-          sdkmanager --version
+          set -euo pipefail
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+
+          if [ ! -d "$SDK_ROOT" ]; then
+            SDK_ROOT="/usr/local/lib/android/sdk"
+          fi
+
+          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null || true)"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: Android sdkmanager was not found."
+            echo "SDK_ROOT=$SDK_ROOT"
+            find /usr/local/lib/android -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
+            exit 1
+          fi
+
+          SDKMANAGER_DIR="$(dirname "$SDKMANAGER")"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "Using sdkmanager: $SDKMANAGER"
+          "$SDKMANAGER" --version
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          set -e
-          yes | sdkmanager --licenses >/dev/null || true
-          yes | sdkmanager --licenses >/dev/null
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
 
       - name: Install required Android SDK packages
         shell: bash
         run: |
-          set -e
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
@@ -64,7 +82,7 @@ jobs:
       - name: Run unit tests and compile debug APK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
 
       - name: Upload installable debug APK
