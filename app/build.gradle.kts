@@ -13,12 +13,12 @@ plugins {
 
 android {
     namespace = "com.yaarapp.app"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.yaarapp.app"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 24
         versionName = "1.5.1"
 
