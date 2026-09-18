@@ -63,7 +63,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yaarapp.app.data.CityRepository
 import com.yaarapp.app.data.ProductCategories
-import com.yaarapp.app.data.maxImmoListings
 import com.yaarapp.app.util.ImageStorage
 import com.yaarapp.app.viewmodel.YaarViewModel
 
@@ -159,18 +158,6 @@ fun ProductForm(viewModel: YaarViewModel, onBack: () -> Unit, onSaved: () -> Uni
             if (error != null) Text(error ?: "", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
             Button(onClick = { showCityPicker = true }, enabled = pickedImageUri != null && category != null && name.isNotBlank() && description.isNotBlank() && price.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) { Text("Publier le produit") }
         }
-    }
-
-    if (immoLimit != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.clearImmoLimitReached() },
-            title = { Text("Limite d'annonces atteinte") },
-            text = { Text("Votre capacité actuelle est de ${immoLimit} annonces immobilières. Passez à 20 annonces pour 5 000 FCFA. Les paiements seront activés le 01/11/2026.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.clearImmoLimitReached(); onUpgradeImmo() }) { Text("Voir le forfait") }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.clearImmoLimitReached() }) { Text("Plus tard") } }
-        )
     }
 
     if (showCityPicker) {
@@ -347,6 +334,18 @@ private fun ImmoForm(
                 shape = RoundedCornerShape(14.dp)
             ) { Text("Publier l'annonce") }
         }
+    }
+
+    if (immoLimit != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearImmoLimitReached() },
+            title = { Text("Limite d'annonces atteinte") },
+            text = { Text("Votre capacité actuelle est de ${immoLimit} annonces immobilières. Passez à 20 annonces pour 5 000 FCFA. Les paiements seront activés le 01/11/2026.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearImmoLimitReached(); onUpgradeImmo() }) { Text("Voir le forfait") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.clearImmoLimitReached() }) { Text("Plus tard") } }
+        )
     }
 }
 
