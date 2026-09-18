@@ -13,7 +13,7 @@ plugins {
 
 android {
     namespace = "com.yaarapp.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.yaarapp.app"

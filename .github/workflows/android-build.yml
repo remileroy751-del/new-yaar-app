@@ -43,7 +43,7 @@ jobs:
             SDK_ROOT="/usr/local/lib/android/sdk"
           fi
 
-          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null || true)"
+          SDKMANAGER="$(find "$SDK_ROOT" /usr/local/lib/android /opt/android-sdk -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null || true)"
 
           if [ -z "$SDKMANAGER" ]; then
             echo "ERROR: Android sdkmanager was not found."
@@ -64,15 +64,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" /usr/local/lib/android /opt/android-sdk -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
 
       - name: Install required Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT" /usr/local/lib/android /opt/android-sdk -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null)"
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
