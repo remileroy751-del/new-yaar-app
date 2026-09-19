@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.yaarapp.app.data.CityRepository
 import com.yaarapp.app.data.ProductCategories
+import com.yaarapp.app.data.maxImmoListings
 import com.yaarapp.app.util.ImageStorage
 import com.yaarapp.app.viewmodel.YaarViewModel
 
